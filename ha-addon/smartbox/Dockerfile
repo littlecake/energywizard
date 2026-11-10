@@ -41,6 +41,8 @@ RUN cp -r /src/smartbox /smartbox \
     && cp -r /src/ewapp /ewapp \
     && cp -r /src/webdashboard /webdashboard \
     && cp /src/LICENSE /LICENSE && cp /src/LICENSE /smartbox/LICENSE \
+    && mkdir -p /tmp/ew-tests \
+    && cp /src/tests/test_cz_tariffs.py /src/tests/test_i18n_named.py /tmp/ew-tests/ \
     && rm -rf /src
 
 # Motorns beroenden + det gränssnitten installerar i sina egna Dockerfiles
@@ -48,6 +50,8 @@ RUN cp -r /src/smartbox /smartbox \
 RUN pip install --no-cache-dir -r /smartbox/requirements.txt \
     && pip install --no-cache-dir fastapi "uvicorn[standard]" requests sqlalchemy \
         "psycopg[binary]" psycopg_pool pandas "numpy<2.4" PyYAML pymodbus pillow
+
+RUN PYTHONPATH=/smartbox python -m unittest discover -s /tmp/ew-tests
 
 # ewapp/Dockerfile genererar PWA-ikonerna vid bygge - samma steg här.
 RUN cd /ewapp && python make_icons.py
