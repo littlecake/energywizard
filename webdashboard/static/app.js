@@ -1325,7 +1325,7 @@ async function mountPriceSettings() {
         <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px;min-width:0"><span class="note">Säljavtal</span><select id="psellmode"><option value="spot"${d.sell_mode !== "fixed" ? " selected" : ""}>Spotpris</option><option value="fixed"${d.sell_mode === "fixed" ? " selected" : ""}>Fast pris</option></select></label>
         ${field("psellfixed", `Fast försäljningspris (${sym}/kWh)`, d.sell_fixed ?? "", "Slutpris enligt avtal; justeringen ovan läggs till")}
       </div>
-      <details id="phdodetails" style="margin-top:12px"${d.hdo_entity ? " open" : ""}><summary><b>Distribution via HDO</b></summary>
+      <details id="phdodetails" style="margin-top:12px"${d.country !== "CZ" ? " hidden" : ""}${d.hdo_entity && d.country === "CZ" ? " open" : ""}><summary><b>Distribution via HDO</b></summary>
         <label style="display:flex;flex-direction:column;margin-top:8px"><span class="note">HDO-schema från Home Assistant</span>
           <select id="phdo"><option value="">Av</option>${schedules.map(e => `<option value="${esc(e.entity_id)}"${e.entity_id === d.hdo_entity ? " selected" : ""}>${esc(e.name)} · ${esc(e.entity_id)}</option>`).join("")}${d.hdo_entity && !schedules.some(e => e.entity_id === d.hdo_entity) ? `<option value="${esc(d.hdo_entity)}" selected>${esc(d.hdo_entity)} (otillgänglig)</option>` : ""}</select></label>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
@@ -1365,7 +1365,7 @@ async function mountPriceSettings() {
         Exempel: spotpris 1,00 ${sym} (exkl. moms) blir <b>${kr(d.example.buy)} ${sym}/kWh</b> att köpa och <b>${kr(d.example.sell)} ${sym}/kWh</b> att sälja.</div>
       <button class="icobtn" id="psave" style="margin-top:10px">Spara</button>`;
     const loadSchedules = async () => {
-      if (!document.getElementById("phdodetails").open) return;
+      if (d.country !== "CZ" || !document.getElementById("phdodetails").open) return;
       const select = document.getElementById("phdo");
       try {
         const h = await api("api/distribution-schedules");
@@ -1376,7 +1376,7 @@ async function mountPriceSettings() {
       } catch (e) { /* keep selected entity if HA is temporarily unavailable */ }
     };
     document.getElementById("phdodetails").ontoggle = loadSchedules;
-    if (d.hdo_entity) loadSchedules();
+    if (d.country === "CZ" && d.hdo_entity) loadSchedules();
     for (const [mode, fixed] of [["pbuymode", "pbuyfixed"], ["psellmode", "psellfixed"]]) {
       const select = document.getElementById(mode), field = document.getElementById(fixed).parentElement;
       const show = () => { field.style.display = select.value === "fixed" ? "flex" : "none"; };

@@ -2001,13 +2001,16 @@ def _index_html() -> str:
     """index.html med versionsmärkta app.js/style.css (?v=innehållets hash). #167: Home Assistant-appen på iOS visade en
     sparad, gammal style.css trots Cache-Control: no-cache - ett nytt filnamn per version hämtas alltid på nytt."""
     import hashlib
-    files = ("static/index.html", "static/app.js", "static/style.css")
+    files = ("static/index.html", "static/app.js", "static/style.css",
+             os.path.join(i18n_routes.DIR, "i18n.js"))
     key = tuple(os.path.getmtime(f) for f in files)
     if _INDEX_CACHE["key"] != key:
         html = open(files[0], encoding="utf-8").read()
         for name in ("app.js", "style.css"):
             v = hashlib.sha1(open(f"static/{name}", "rb").read()).hexdigest()[:10]
             html = html.replace(f'"static/{name}"', f'"static/{name}?v={v}"')
+        v = hashlib.sha1(open(files[3], "rb").read()).hexdigest()[:10]
+        html = html.replace('"i18n/i18n.js"', f'"i18n/i18n.js?v={v}"')
         _INDEX_CACHE.update(key=key, html=html)
     return _INDEX_CACHE["html"]
 

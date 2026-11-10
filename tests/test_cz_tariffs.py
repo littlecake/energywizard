@@ -39,6 +39,14 @@ class CzechTariffs(unittest.TestCase):
         self.assertAlmostEqual(N.full_buy_cost(1), 1.87675)
         self.assertAlmostEqual(N.full_sell_income(1), 1.02125)
 
+    def test_hdo_inactive_outside_czechia(self):
+        self.settings.update(price_country="SE", price_hdo_entity="sensor.cez_hdo_schedule_home",
+                             price_distribution_nt=.2, price_distribution_vt=1.2)
+        with patch.object(D, "schedule_for", side_effect=AssertionError("HDO must not be fetched")):
+            self.assertEqual(D.distribution_at(None, N.cost_settings()), 0)
+            self.assertEqual(D.sql_distribution_expr("t", N.cost_settings()), "")
+            self.assertAlmostEqual(N.full_buy_cost(1), 1.87675)
+
     def test_fixed_buy_independent_of_spot(self):
         self.settings.update(price_buy_mode="fixed", price_buy_fixed=3, price_buy_extra=.1, price_sell_extra=-.3)
         for p in (-5, 0, 12):

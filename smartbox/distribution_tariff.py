@@ -75,7 +75,7 @@ def _rates(c):
 
 
 def distribution_at(t, c):
-    if not c.get("hdo_entity"):
+    if c.get("country") != "CZ" or not c.get("hdo_entity"):
         return 0.0
     nt, vt = _rates(c)
     if t is None:
@@ -91,7 +91,7 @@ def distribution_at(t, c):
 
 def sql_distribution_expr(tcol, c):
     """Same interval boundaries and fallback as distribution_at, for PostgreSQL."""
-    if not c.get("hdo_entity"):
+    if c.get("country") != "CZ" or not c.get("hdo_entity"):
         return ""
     if not tcol:
         return f" + {distribution_at(None, c)}"
