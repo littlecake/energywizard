@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 import learning
 import logger
 import notifier
+import ev_power
 import nordpool
 
 
@@ -77,7 +78,7 @@ def _car_specs(state, car_ids):
         s = specs.get(cid) or {}
         ph = str(s.get('phases', 'auto')).lower()
         out[cid] = {"name": s.get("name") or cid.capitalize(), "max_a": int(s.get("max_a") or 16),
-                    "phases": ph if ph in ("1", "3", "auto") else "auto"}
+                    "phases": ph if ph in ("1", "3", "auto") else "auto", "max_charge_kw": s.get("max_charge_kw")}
     return out
 
 
@@ -586,7 +587,7 @@ class GlobalPriorityManager:
                                 if specs[c]["phases"] == "3":
                                     return 3
                                 return 3 if any(x in str(state.get(f'{c}_phases')) for x in ['Three', '3', 'auto', 'Auto']) else 1
-                            planned = {c: (int(round((kw[c] * 1000) / (230 * _ph(c)))) if kw[c] > 0 else 0) for c in car_ids}
+                            planned = {c: (ev_power.amps_for_kw(kw[c], specs[c].get("max_charge_kw"), specs[c]["max_a"], _ph(c)) if kw[c] > 0 else 0) for c in car_ids}
                             planned_amps = sum(planned.values())
 
                             panic = {c: (bool(row.get(f'{c}_panic', False)) if f'{c}_panic' in row else False) for c in car_ids}

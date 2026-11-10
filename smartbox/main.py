@@ -201,6 +201,9 @@ _last_ready_sig = [None]
 for _c, _chg in _ev_learn.apply(CAR_SPECS, _EV_EXPLICIT).items():
     print(f"🚗 {CAR_SPECS[_c]['name']}: inlärt av laddningarna {_chg} (installationen anger inte detta)")
 _ev_learn_saved = {"at": time.time(), "sig": str(_ev_learn.data)}
+for _ev in house_cfg.get("evs") or []:     # evs[].charge_block: single | split (standard split) - se ev_block.py
+    if _ev.get("id") in CAR_SPECS:
+        CAR_SPECS[_ev["id"]]["charge_block"] = str(_ev.get("charge_block") or "split").lower()
 settings.set_fuse_size_from_house_config(house_cfg)   # fuse.main_fuse_a i installationen -> inställningen (#129)
 # Namnet i HA-sensorn sensor.smartbox_<namn>_batteri: evs[].ha_name, annars bilens id
 CAR_HA_NAME = {ev["id"]: re.sub(r"[^a-z0-9_]", "_", str(ev.get("ha_name") or ev["id"]).lower())

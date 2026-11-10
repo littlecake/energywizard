@@ -16,6 +16,8 @@ import pandas as pd
 import logger
 import weather
 import settings
+import ev_power   # bilens maxeffekt (evs[].max_charge_kw)
+import ev_block   # enkelblock-laddning (evs[].charge_block: single)
 
 # Lastbalansering – Easee elbilsladdare
 MAX_FUSE_A  = 25    # Huvudsäkring (A)
@@ -57,9 +59,17 @@ def is_price_low(current_price):
 
 def check_spa_schedule_plan(now, target_dt, curr_temp, target_temp, model_intercept, model_slope_out, model_slope_spa, cooling_k, spa_max_temp, outdoor_temp, spa_low_temp=15.0):  # FIX: tog bort oanvänd param spa_normal_temp
     """Kollar om nuvarande timme är vald för uppvärmning baserat på pris och framtida solprognos."""
+    # Spa drivers return None while the water-temperature sensor is unavailable (#230).
+    # A schedule needs a measured starting temperature; wait for the next valid reading.
+    try:
+        curr_temp = float(curr_temp)
+    except (TypeError, ValueError):
+        return False, False
+    if not math.isfinite(curr_temp):
+        return False, False
+
     try:
         import pandas as pd
-        import math
         import logger as sm_logger
         import weather
 
@@ -287,7 +297,9 @@ def calculate_ev_charge_plan(now, ev_schedule, car_data, cfg):
                                                        car_data.get(f'{cid}_ready_by'), car_data.get(f'{cid}_ready_soc'))
         cars[cid] = {"soc": soc, "plugged": car_data.get(f'{cid}_plugged_in', False), "phases": _phases(cid),
                      "max_a": int(sp.get('max_a') or 16), "battery_kwh": bkwh,
-                     "target_dt": t_dt, "target_soc": t_soc, "kwh": kwh, "panic": panic}
+                     "kw_per_amp": ev_power.kw_per_amp(sp.get('max_charge_kw'), int(sp.get('max_a') or 16), _phases(cid)),
+                     "target_dt": t_dt, "target_soc": t_soc, "kwh": kwh, "panic": panic,
+                     "single_block": str(sp.get('charge_block', 'split')).lower() == 'single'}
 
     max_dt = now
     for c in cars.values():
@@ -411,8 +423,9 @@ def calculate_ev_charge_plan(now, ev_schedule, car_data, cfg):
     for cid, c in cars.items():
         if c["target_dt"] and c["kwh"] > 0 and c["plugged"]:
             cars_to_plan.append({'id': cid, 'deadline': full_charge_deadline(now, c["target_dt"], c["target_soc"]), 'kwh_needed': c["kwh"],
-                                 'min_kw': 6 * 230 * c["phases"] / 1000.0, 'max_kw': min(c["max_a"], fuse_a) * 230 * c["phases"] / 1000.0,
-                                 'panic_mode': c["panic"], 'floor': get_morning_floor(now, c["soc"], c["battery_kwh"], c["target_dt"])})
+                                 'min_kw': 6 * c["kw_per_amp"], 'max_kw': min(c["max_a"], fuse_a) * c["kw_per_amp"],
+                                 'panic_mode': c["panic"], 'floor': get_morning_floor(now, c["soc"], c["battery_kwh"], c["target_dt"]),
+                                 'single_block': c["single_block"]})
     cars_to_plan.sort(key=lambda x: x['deadline'])
 
     hourly_energy_allocated = {}
@@ -440,6 +453,12 @@ def calculate_ev_charge_plan(now, ev_schedule, car_data, cfg):
                 continue
 
             charge_slots_indices = potential_slots_df.sort_values('score').index.tolist()
+            if car.get('single_block'):
+                # charge_block: single - ETT sammanhängande fönster (ev_block.py) i stället för de billigaste kvartarna
+                # var för sig. None = inget sammanhängande fönster ryms före avresan: då planeras det kvartsvis som förut.
+                _block_order = ev_block.contiguous_slot_order(potential_slots_df, kwh_needed, car_max_kw)
+                if _block_order is not None:
+                    charge_slots_indices = _block_order
             kwh_rem = kwh_needed
 
             # PASS 1: Respektera Peak Shaving (Effektvakten)

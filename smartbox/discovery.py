@@ -28,7 +28,8 @@ from house_config import (
 # föreslår alltid "generic" rakt av, aldrig en driver_known-koll mot registret.
 
 # --- Kategori-regexer, portade från Familjetavlas discovery.ts ---
-CAR_MAKERS = re.compile(r"tesla|nissan|volvo|polestar|kia|hyundai|volkswagen|vw|skoda|audi|bmw|mini|mercedes|renault|peugeot|citro|opel|toyota|lexus|ford|byd|porsche|cupra|seat|fiat|jaguar|zeekr|xpeng|nio|honda|mazda|subaru|smart", re.I)
+# The official HA integration reports "Škoda Auto"; accept both spellings without a tracker (#225).
+CAR_MAKERS = re.compile(r"tesla|nissan|volvo|polestar|kia|hyundai|volkswagen|vw|[sš]koda|audi|bmw|mini|mercedes|renault|peugeot|citro|opel|toyota|lexus|ford|byd|porsche|cupra|seat|fiat|jaguar|zeekr|xpeng|nio|honda|mazda|subaru|smart", re.I)
 PHONE_MAKERS = re.compile(r"^(samsung|apple|google|oneplus|xiaomi|huawei|oppo|motorola|sony|nokia|nothing|fairphone|realme|vivo|honor)\b", re.I)
 SOLAR = re.compile(r"solar|sol(el|ar)?\b|pv\b|photovolt|inverter|växelriktare|produktion|production|yield", re.I)
 INVERTER_MAKERS = re.compile(r"solaredge|huawei|fronius|sma\b|growatt|enphase|goodwe|solis|sungrow|deye|victron|ferroamp|solax|kostal|apsystems", re.I)
@@ -667,7 +668,11 @@ def discover_house(entities: list[dict] | None = None) -> dict:
         # "enhet" per pryl i nätverket döpt efter nätverkskortets tillverkare ("Nibe") - den är ingen värmepump.
         if not any(_is_temperature(x) or x["e"].startswith(("climate.", "water_heater.")) for x in ents):
             continue
-        if _has(_candidate(head), HEATPUMP):
+        # #198: NetHome Plus/Innova via Midea AC LAN reports manufacturer "Midea".
+        # Require a climate entity: the same maker also produces fans and appliances.
+        midea_climate = (_has(head.get("m"), re.compile(r"^(midea|innova)\b", re.I))
+                         and any(x["e"].startswith("climate.") for x in ents))
+        if _has(_candidate(head), HEATPUMP) or midea_climate:
             brand = next((b for b in _HEATPUMP_BRAND_TO_DRIVER if _has(_candidate(head), re.compile(b, re.I))), None)
             driver = _HEATPUMP_BRAND_TO_DRIVER.get(brand)
             heat_pump = {
