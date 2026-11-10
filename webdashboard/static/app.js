@@ -1321,9 +1321,9 @@ async function mountPriceSettings() {
         ${field("psell", `Ersättning vid försäljning (${sym}/kWh)`, d.sell_extra, "Utöver spotpriset, t.ex. nätnytta")}
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-        <label><span class="note">Köpavtal</span><select id="pbuymode"><option value="spot"${d.buy_mode !== "fixed" ? " selected" : ""}>Spotpris</option><option value="fixed"${d.buy_mode === "fixed" ? " selected" : ""}>Fast pris</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px;min-width:0"><span class="note">Köpavtal</span><select id="pbuymode"><option value="spot"${d.buy_mode !== "fixed" ? " selected" : ""}>Spotpris</option><option value="fixed"${d.buy_mode === "fixed" ? " selected" : ""}>Fast pris</option></select></label>
         ${field("pbuyfixed", `Fast inköpspris (${sym}/kWh, inkl. moms)`, d.buy_fixed || 0, "Endast elhandel; avgifter och distribution läggs till separat")}
-        <label><span class="note">Säljavtal</span><select id="psellmode"><option value="spot"${d.sell_mode !== "fixed" ? " selected" : ""}>Spotpris</option><option value="fixed"${d.sell_mode === "fixed" ? " selected" : ""}>Fast pris</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px;min-width:0"><span class="note">Säljavtal</span><select id="psellmode"><option value="spot"${d.sell_mode !== "fixed" ? " selected" : ""}>Spotpris</option><option value="fixed"${d.sell_mode === "fixed" ? " selected" : ""}>Fast pris</option></select></label>
         ${field("psellfixed", `Fast försäljningspris (${sym}/kWh)`, d.sell_fixed || 0, "Slutpris enligt avtal; justeringen ovan läggs till")}
       </div>
       <details style="margin-top:12px"${d.hdo_entity ? " open" : ""}><summary><b>Distribution via HDO</b></summary>
@@ -1365,6 +1365,11 @@ async function mountPriceSettings() {
       <div style="margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card2);line-height:1.5">
         Exempel: spotpris 1,00 ${sym} (exkl. moms) blir <b>${kr(d.example.buy)} ${sym}/kWh</b> att köpa och <b>${kr(d.example.sell)} ${sym}/kWh</b> att sälja.</div>
       <button class="icobtn" id="psave" style="margin-top:10px">Spara</button>`;
+    for (const [mode, fixed] of [["pbuymode", "pbuyfixed"], ["psellmode", "psellfixed"]]) {
+      const select = document.getElementById(mode), field = document.getElementById(fixed).parentElement;
+      const show = () => { field.style.display = select.value === "fixed" ? "flex" : "none"; };
+      select.onchange = show; show();
+    }
     document.getElementById("pcountry").onchange = (e) => {
       const k = e.target.value, cc = d.countries[k];
       Object.assign(d, { country: k, area: cc.areas[0], vat_pct: cc.vat_pct, currency: cc.currency, symbol: cc.currency === "EUR" ? "€" : cc.currency === "GBP" ? "£" : cc.currency === "PLN" ? "zł" : cc.currency === "CZK" ? "Kč" : "kr",
