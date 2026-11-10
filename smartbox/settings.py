@@ -237,6 +237,18 @@ def set_fuse_size_from_house_config(house_cfg: dict) -> None:
         print(f"⚠️ Kunde inte läsa in huvudsäkringen ur installationen: {e}")
 
 
+def _migrate_schedule_car_id(cur, table_name):
+    """Remove the legacy 20-character limit without changing configured car IDs (#232)."""
+    cur.execute("""
+        SELECT character_maximum_length FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = %s AND column_name = 'car_id'
+    """, (table_name,))
+    column = cur.fetchone()
+    if column and column[0] is not None:
+        cur.execute(psycopg.sql.SQL("ALTER TABLE {} ALTER COLUMN car_id TYPE TEXT").format(
+            psycopg.sql.Identifier(table_name)))
+
+
 def get_climate_schedule(car_ids=None):
     """Hämtar klimatschemat från databasen - en rad per bil i installationen (car_ids), inga fasta bilnamn."""
     schedule = {c: {'enabled': False, 'target_time': '07:00', 'target_temp': 21.0} for c in (car_ids or [])}
@@ -245,12 +257,13 @@ def get_climate_schedule(car_ids=None):
             with conn.cursor() as cur:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS climate_schedule (
-                        car_id VARCHAR(20) PRIMARY KEY,
+                        car_id TEXT PRIMARY KEY,
                         target_time TIME,
                         target_temp NUMERIC,
                         enabled BOOLEAN DEFAULT FALSE
                     )
                 """)
+                _migrate_schedule_car_id(cur, "climate_schedule")
             conn.commit()
             df = pd.read_sql("SELECT * FROM climate_schedule", conn)
             for _, row in df.iterrows():
@@ -278,7 +291,7 @@ def get_ev_schedule(car_ids=None):
             with conn.cursor() as cur:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS ev_charging_schedule (
-                        car_id VARCHAR(20),
+                        car_id TEXT,
                         day_of_week INTEGER,
                         target_time TIME,
                         target_soc INTEGER DEFAULT 100,
@@ -287,7 +300,8 @@ def get_ev_schedule(car_ids=None):
                         PRIMARY KEY (car_id, day_of_week)
                     )
                 """)
-                cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='ev_charging_schedule' AND column_name='panic_mode'")
+                _migrate_schedule_car_id(cur, "ev_charging_schedule")
+                cur.execute("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='ev_charging_schedule' AND column_name='panic_mode'")
                 if cur.fetchone() is None:
                     cur.execute("ALTER TABLE ev_charging_schedule ADD COLUMN panic_mode BOOLEAN DEFAULT FALSE")
             conn.commit()

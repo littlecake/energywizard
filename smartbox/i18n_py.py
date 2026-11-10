@@ -25,6 +25,13 @@ _state = {"lang": None, "at": 0.0, "dict": {}, "dict_lang": None}
 
 # Meningar med namn i (bilar, entiteter) - samma regler som RULES i i18n.js (engelska)
 RULES_EN = [
+    (re.compile(r"^Använd effektsensorn (.+)$"), lambda m: f"Use power sensor {m[1]}"),
+    (re.compile(r"^Smartmätare: (.+)$"), lambda m: "Smart meter: " + m[1].replace("okänt märke", "unknown brand")),
+    (re.compile(r"^hittades \(([^)]+)(\)?)$"), lambda m: "found (" + m[1].replace("okänt märke", "unknown brand") + m[2]),
+    (re.compile(r"^(Effekt|Dagsenergi|Kabel|Klimat): (.+)$"), lambda m: {"Effekt": "Power", "Dagsenergi": "Today's energy", "Kabel": "Cable", "Klimat": "Climate"}[m[1]] + ": " + m[2]),
+    (re.compile(r"^Laddningen av (.+) har startat med (.+) kW$"), lambda m: f"Charging {m[1]} started at {m[2]} kW"),
+    (re.compile(r"^Laddningen av (.+) har avslutats$"), lambda m: f"Charging {m[1]} has finished"),
+    (re.compile(r"^(.+) svarar inte$"), lambda m: f"{m[1]} is not responding"),
     (re.compile(r"^GPS: (.+) närmar sig hemmet! \(Avstånd: (.+?) km(\)?)$"), lambda m: f"GPS: {m[1]} is approaching home! (Distance: {m[2]} km{m[3]}"),
     (re.compile(r"^Hittade befintligt framtida schema för (.+)$"), lambda m: f"Found an existing future schedule for {m[1]}"),
     (re.compile(r"^(\S+(?: \S+){0,2}) frånkopplad$"), lambda m: f"{m[1]} disconnected"),

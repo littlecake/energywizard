@@ -24,6 +24,13 @@
 
   // Meningar med namn eller fri text i, som inte går att slå upp ord för ord.
   const RULES = [
+    [/^Använd effektsensorn (.+)$/, (m) => "Use power sensor " + m[1]],
+    [/^Smartmätare: (.+)$/, (m) => "Smart meter: " + m[1].replace("okänt märke", "unknown brand")],
+    [/^hittades \((.+)\)$/, (m) => "found (" + m[1].replace("okänt märke", "unknown brand") + ")"],
+    [/^(Effekt|Dagsenergi|Kabel|Klimat): (.+)$/, (m) => ({ Effekt: "Power", Dagsenergi: "Today's energy", Kabel: "Cable", Klimat: "Climate" })[m[1]] + ": " + m[2]],
+    [/^Laddningen av (.+) har startat med (.+) kW$/, (m) => "Charging " + m[1] + " started at " + m[2] + " kW"],
+    [/^Laddningen av (.+) har avslutats$/, (m) => "Charging " + m[1] + " has finished"],
+    [/^(.+) svarar inte$/, (m) => m[1] + " is not responding"],
     [/^God (morgon|natt|kväll), (.+)!$/, (m) => ({ morgon: "Good morning", natt: "Good night", "kväll": "Good evening" })[m[1]] + ", " + m[2] + "!"],
     [/^Hej, (.+)!$/, (m) => "Hello, " + m[1] + "!"],
     [/^Inloggad som (.+)$/, (m) => "Logged in as " + (m[1] === "ägare" ? "owner" : m[1])],

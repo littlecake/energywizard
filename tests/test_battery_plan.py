@@ -2,6 +2,8 @@
 import os
 import sys
 
+import pytest
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "smartbox")))
 
 from battery_plan import optimize, blocks, simulate
@@ -231,3 +233,27 @@ def test_batteripass_har_niva_energi_och_pris_for_planklockan():
     assert (ladd["soc_from"], ladd["soc_to"], ladd["kwh"], ladd["price_peak"]) == (35, 50, 1.0, 0.2)
     # Äldre rader utan battery_kw går fortfarande
     assert battery_items([r[:4] for r in rows], now)[0]["kwh"] is None
+
+
+@pytest.mark.parametrize("initial_kwh", [0.0, 1.7, 2.0])
+def test_plan_recovers_from_reserve_without_discharging_below_it(initial_kwh):
+    from battery_control import decide
+
+    r = optimize(_slots([0.01] + CHEAP_THEN_DEAR[1:]), initial_kwh, 10.0, 2.0, 10.0, 3.0, 3.0)
+    assert r["rows"][0]["action"] == "charge"
+    previous_kwh = initial_kwh
+    for row in r["rows"]:
+        assert row["soc_kwh"] >= min(previous_kwh, 2.0) - 1e-9
+        if previous_kwh <= 2.0:
+            assert row["action"] != "discharge"
+            assert row["battery_kw"] >= 0
+        previous_kwh = row["soc_kwh"]
+
+    # Feed the actual optimizer output into the controller, as main.py does.
+    decision = decide({"soc": initial_kwh * 10, "price": 0.3,
+                       "planned_action": r["rows"][0]["action"],
+                       "planned_power_w": r["rows"][0]["battery_kw"] * 1000},
+                      {"control": "styr", "reserve_soc": 20, "max_power_w": 3000},
+                      {"auto", "charge", "discharge"})
+    assert decision["intent"] == "charge" and decision["rule"] == "plan"
+    assert decision["power_w"] == 3000

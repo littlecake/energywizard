@@ -2,6 +2,8 @@
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
+import pytest
+
 from battery_control import decide, should_apply
 from drivers.battery_generic import GenericBatteryDriver
 from house_config import battery_settings, build_battery_driver
@@ -196,3 +198,34 @@ def test_liten_effektandring_i_samma_lage_skrivs_inte():
     assert bc.should_apply({"intent": "discharge", "power_w": 3150, "rule": "plan"}, last, t0, later) is False
     assert bc.should_apply({"intent": "discharge", "power_w": 3500, "rule": "plan"}, last, t0, later) is True
     assert bc.should_apply({"intent": "charge", "power_w": 3000, "rule": "plan"}, last, t0, later) is True
+
+
+@pytest.mark.parametrize("soc", [0.0, 17.0, 20.0, 21.0])
+@pytest.mark.parametrize("supported", [ALL, frozenset({"auto", "charge", "discharge"})])
+def test_planned_charge_can_recover_battery_at_or_below_reserve(soc, supported):
+    # Solis has no hold mode: the old reserve rule fell back to auto and never charged.
+    r = decide({**BASE, "soc": soc, "price": 0.3,
+                "planned_action": "charge", "planned_power_w": 1800.0}, STYR, supported)
+    assert r["intent"] == "charge"
+    assert r["rule"] == "plan"
+    assert r["power_w"] == 1800.0
+
+
+@pytest.mark.parametrize("soc", [0.0, 17.0, 20.0])
+@pytest.mark.parametrize("planned", [None, "auto", "hold", "idle", "discharge"])
+def test_reserve_still_blocks_non_charging_plans(soc, planned):
+    r = d(soc=soc, planned_action=planned)
+    assert r["intent"] == "hold" and r["rule"] == "reserve"
+    assert r["power_w"] is None
+
+
+@pytest.mark.parametrize("soc", [17.0, 20.0])
+def test_low_soc_charge_keeps_command_limits_and_priority(soc):
+    s = {**BASE, "soc": soc, "planned_action": "charge", "planned_power_w": 99999.0}
+    assert decide(s, STYR, ALL)["power_w"] == STYR["max_power_w"]
+    assert decide({**s, "meter_fresh": False}, STYR, ALL)["rule"] == "stale"
+    assert decide({**s, "ev_charging_grid": True}, STYR, ALL)["rule"] == "ev_grid"
+    assert decide({**s, "price": -0.1}, STYR, ALL)["rule"] == "negative"
+    assert decide(s, STYR, {"auto"})["intent"] == "auto"
+    for control in ("samarbete", "av"):
+        assert decide(s, {**STYR, "control": control}, ALL)["intent"] is None

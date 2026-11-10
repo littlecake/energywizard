@@ -1,5 +1,7 @@
 // EnergyWizard Webdashboard - Fas B: Översikt-sidan med riktig data (portad från
 // smartdashboard/app.py:s page_overview()). Resten av sidorna byggs i senare steg.
+let moneyCurrency = "SEK", moneySymbol = "kr";
+const moneyUnit = () => moneySymbol;
 let PAGES = [];
 let currentPage = null;
 
@@ -17,7 +19,7 @@ let currentPage = null;
 
 function fmtKrOre(v) {
   if (v == null) return "–";
-  return Math.abs(v) < 1 && v !== 0 ? `${Math.round(v * 100)} öre` : `${v.toFixed(2)} kr`;
+  return moneyCurrency === "SEK" && Math.abs(v) < 1 && v !== 0 ? `${Math.round(v * 100)} öre` : `${v.toFixed(2)} ${moneyUnit()}`;
 }
 function fmt(v, dec, unit) { return v == null ? "–" : `${v.toFixed(dec)}${unit}`; }
 
@@ -51,10 +53,10 @@ function savingsCardHtml(d) {
   const p = d.periods[savingsPeriod] || d.periods.week;
   const pos = p.saved_kr >= 0;
   const sign = p.saved_kr > 0 ? "+" : p.saved_kr < 0 ? "−" : "";
-  const kr = `${sign}${Math.abs(p.saved_kr).toFixed(0)} kr`;
+  const kr = `${sign}${Math.abs(p.saved_kr).toFixed(0)} ${moneyUnit()}`;
   const pct = p.pct != null ? ` <span style="font-size:1rem;font-weight:700;opacity:.8">(${p.pct > 0 ? "+" : ""}${p.pct.toFixed(0)} %)</span>` : "";
   const sub = p.days
-    ? `${p.kwh.toFixed(0)} kWh köpt för ${p.paid_kr.toFixed(0)} kr, mot ${(p.paid_kr + p.saved_kr).toFixed(0)} kr i ett vanligt hushåll utan styrning (inkl. moms)${p.days > 1 ? ` · ${p.days} dagar med data` : ""}`
+    ? `${p.kwh.toFixed(0)} kWh köpt för ${p.paid_kr.toFixed(0)} ${moneyUnit()}, mot ${(p.paid_kr + p.saved_kr).toFixed(0)} ${moneyUnit()} i ett vanligt hushåll utan styrning (inkl. moms)${p.days > 1 ? ` · ${p.days} dagar med data` : ""}`
     : "Ingen mätdata för perioden än.";
   return `
     <div class="card" id="savingscard">
@@ -94,7 +96,7 @@ function savingsBars(elId, days, height) {
   const good = css.getPropertyValue("--acc").trim() || "#22d3a0", bad = css.getPropertyValue("--bad").trim() || "#f87171";
   chart.setOption({
     grid: { left: height ? 40 : 4, right: 4, top: 6, bottom: height ? 30 : 4 },
-    tooltip: { trigger: "axis", formatter: (ps) => `${ps[0].name}: ${ps[0].value >= 0 ? "+" : ""}${ps[0].value.toFixed(2)} kr` },
+    tooltip: { trigger: "axis", formatter: (ps) => `${ps[0].name}: ${ps[0].value >= 0 ? "+" : ""}${ps[0].value.toFixed(2)} ${moneyUnit()}` },
     xAxis: { type: "category", data: days.map((r) => r.day.slice(5)), show: !!height, axisLabel: { color: "#93a0b8" } },
     yAxis: { type: "value", show: !!height, splitLine: { lineStyle: { color: "rgba(255,255,255,.08)" } }, axisLabel: { color: "#93a0b8" } },
     series: [{ type: "bar", data: days.map((r) => ({ value: r.saved_kr, itemStyle: { color: r.saved_kr >= 0 ? good : bad, borderRadius: r.saved_kr >= 0 ? [3, 3, 0, 0] : [0, 0, 3, 3] } })), barMaxWidth: 14 }],
@@ -164,7 +166,7 @@ function planClockHtml(d) {
   let ticks = "";
   d.prices.forEach((p) => {
     const a = ang(p.t), [x1, y1] = pt(a, 122), [x2, y2] = pt(a, 150);
-    ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${priceColor(p[key], lo, hi)}" stroke-width="5.2" stroke-linecap="round"><title>${hhmm(p.t)} · ${kr(p[key])} kr/kWh</title></line>`;
+    ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${priceColor(p[key], lo, hi)}" stroke-width="5.2" stroke-linecap="round"><title>${hhmm(p.t)} · ${kr(p[key])} ${moneyUnit()}/kWh</title></line>`;
   });
   const end24 = new Date(now.getTime() + 24 * 3600e3);
   const arc = (start, end, r, col, w, title) => {
@@ -202,7 +204,7 @@ function planClockHtml(d) {
   const cr = Math.max(30, 106 - Math.min(rings.length, 4) * 15 - 6);
   const center = `<circle cx="${C}" cy="${C}" r="${cr}" fill="var(--bg)"/><circle cx="${C}" cy="${C}" r="${cr}" fill="var(--card2)"/>
     <text x="${C}" y="${C - 2}" text-anchor="middle" font-size="26" font-weight="800" fill="${priceColor(cur[key], lo, hi)}">${kr(cur[key])}</text>
-    <text x="${C}" y="${C + 18}" text-anchor="middle" font-size="11" fill="var(--mut)">kr/kWh ${key === "spot" ? "spot" : "totalt"}</text>`;
+    <text x="${C}" y="${C + 18}" text-anchor="middle" font-size="11" fill="var(--mut)">${moneyUnit()}/kWh ${key === "spot" ? "spot" : "totalt"}</text>`;
   const legend = [["Billigt", CLOCK_COL.cheap], ["Mellan", CLOCK_COL.mid], ["Dyrt", CLOCK_COL.dear]].map(([t, c]) =>
     `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px"><span style="width:10px;height:10px;border-radius:3px;background:${c}"></span>${t}</span>`).join("")
     + rings.slice(0, 4).map((rg) => {
@@ -232,7 +234,7 @@ function batteryLaneText(i, now) {
   if (i.soc_from != null && i.soc_to != null && i.soc_from !== i.soc_to) parts.push(`${i.soc_from}→${i.soc_to} %`);
   else if (i.soc_to != null) parts.push(`${i.soc_to} %`);
   if (i.kwh) parts.push(`${String(i.kwh).replace(".", ",")} kWh`);
-  if (i.price_peak != null) parts.push(`${i.action === "discharge" || i.action === "export" ? "toppris" : "lägsta pris"} ${i.price_peak.toFixed(2).replace(".", ",")} kr`);
+  if (i.price_peak != null) parts.push(`${i.action === "discharge" || i.action === "export" ? "toppris" : "lägsta pris"} ${i.price_peak.toFixed(2).replace(".", ",")} ${moneyUnit()}`);
   return parts.map((p) => `<span>${esc(p)}</span>`).join(" · ");   // en textnod per del, så att översättningen hittar dem
 }
 
@@ -299,7 +301,7 @@ async function mountPlan(slotId) {
     const d = await api("api/plan");
     slot.innerHTML = d.ok ? planCardHtml(d) : "";
     const pcs = slot.querySelector(".ewpcslot");
-    if (pcs) api("api/planclock").then((pc) => { if (pc && pc.ok) EWPlanView.mount(pcs, pc, { lang: (window.I18N && I18N.lang === "en") ? "en" : "sv", unit: "kr" }); }).catch(() => {});
+    if (pcs) api("api/planclock").then((pc) => { if (pc && pc.ok) EWPlanView.mount(pcs, pc, { lang: (window.I18N && I18N.lang === "en") ? "en" : "sv", unit: moneyUnit() }); }).catch(() => {});
     slot.querySelectorAll("[data-clockprice]").forEach((b) => b.onclick = () => {
       clockPriceMode = b.dataset.clockprice; localStorage.setItem("ew_clock_price", clockPriceMode); mountPlan(slotId);
     });
@@ -363,7 +365,7 @@ function timelineChart(elId, d) {
     axisPointer: { link: [{ xAxisIndex: "all" }] },
     grid: [{ left: L, right: R, top: 30, height: "36%" }, { left: L, right: R, top: "52%", bottom: 34 }],
     legend: { data: ["Elpris", "Sol"], top: 0, left: narrow ? "center" : L, itemWidth: 14, itemHeight: 8, textStyle: { color: mut, fontSize: narrow ? 11 : 12 },
-              formatter: (nm) => (nm === "Elpris" ? "Elpris kr/kWh" : "Sol kW") },
+              formatter: (nm) => (nm === "Elpris" ? `Elpris ${moneyUnit()}/kWh` : "Sol kW") },
     xAxis: [
       { type: "category", data: labels, gridIndex: 0, axisLabel: { show: false }, axisTick: { show: false }, axisLine: { lineStyle: { color: mut } } },
       { type: "category", data: labels, gridIndex: 1, axisLabel: { color: mut, interval: step - 1, fontSize: narrow ? 10 : 12 }, axisTick: { interval: step - 1 }, axisLine: { lineStyle: { color: mut } } },
@@ -378,7 +380,7 @@ function timelineChart(elId, d) {
       formatter: (ps) => {
         const i = ps[0].dataIndex, h = d.hours[i];
         const head = `<b>${h.slice(11, 16)}${d.future[i] ? " · planerat" : ""}</b>`;
-        const pr = d.price[i] != null ? `Elpris ${d.price[i].toFixed(2)} kr/kWh` : "";
+        const pr = d.price[i] != null ? `Elpris ${d.price[i].toFixed(2)} ${moneyUnit()}/kWh` : "";
         const sol = d.solar_kw[i] != null ? `Sol ${d.solar_kw[i].toFixed(1)} kW${d.future[i] ? " (prognos)" : ""}` : "";
         return [head, pr, sol, ...lanes.map((l) => `${esc(l.label)}: ${esc(l.text[i] || "–")}`)].filter(Boolean).join("<br>");
       },
@@ -526,10 +528,10 @@ function evPlanChart(elId, d) {
     grid: { left: 46, right: 56, top: 30, bottom: 30 }, legend: { top: 0, textStyle: { color: mut } },
     tooltip: { trigger: "axis", formatter: (ps) => { const t = ts[ps[0].dataIndex];
       return [`<b>${t.slice(5, 10).replace("-", "/")} ${t.slice(11, 16)}</b>`, ...cars.map((c) => { const p = byKey[c + t]; return p ? `${c[0].toUpperCase() + c.slice(1)}: ${p.kw.toFixed(1)} kW${p.soc0 != null ? ` · ${Math.round(p.soc0)} → ${Math.round(p.soc1)} %` : ""}` : null; }).filter(Boolean),
-        priceAt(t) != null ? `Elpris ${priceAt(t).toFixed(2)} kr/kWh` : ""].filter(Boolean).join("<br>"); } },
+        priceAt(t) != null ? `Elpris ${priceAt(t).toFixed(2)} ${moneyUnit()}/kWh` : ""].filter(Boolean).join("<br>"); } },
     xAxis: { type: "category", data: ts.map((t) => t.slice(11, 16)), axisLabel: { color: mut, interval: (i) => ts[i].slice(14, 16) === "00" && Number(ts[i].slice(11, 13)) % 2 === 0 } },
     yAxis: [{ type: "value", name: "kW", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { lineStyle: { color: "rgba(148,163,184,.12)" } } },
-            { type: "value", name: "kr/kWh", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { show: false } }],
+            { type: "value", name: moneyUnit() + "/kWh", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { show: false } }],
     series: [...cars.map((c) => ({ name: c[0].toUpperCase() + c.slice(1), type: "bar", stack: "ev", color: CAR_COL[cars.indexOf(c) % CAR_COL.length], data: ts.map((t) => (byKey[c + t] ? byKey[c + t].kw : 0)), itemStyle: { color: CAR_COL[cars.indexOf(c) % CAR_COL.length], borderRadius: 2 } })),
              { name: "Elpris", type: "line", color: "#fbbf24", step: "end", yAxisIndex: 1, data: ts.map(priceAt), symbol: "none", lineStyle: { color: "#fbbf24", width: 2 } }],
   });
@@ -1076,7 +1078,7 @@ function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<"
 let _toastT = null;
 function toast(msg) {
   const t = document.getElementById("toast");
-  t.textContent = msg;
+  t.textContent = window.I18N ? I18N.tr(msg) : msg;
   t.classList.add("show");
   clearTimeout(_toastT);
   _toastT = setTimeout(() => t.classList.remove("show"), 3200);
@@ -1303,6 +1305,8 @@ async function mountPriceSettings() {
   const card = document.getElementById("pricecard"), body = document.getElementById("pricebody");
   if (!card || !d.ok) return;
   card.hidden = false;
+  moneyCurrency = d.currency;
+  moneySymbol = d.symbol;
   const field = (id, label, val, hint, mode = "decimal") => `<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px;min-width:0">
       <span class="note">${label}</span><input id="${id}" inputmode="${mode}" value="${val ?? ""}" style="width:100%">${hint ? `<span class="note" style="font-size:.78rem">${hint}</span>` : ""}</label>`;
   const draw = () => {
@@ -1315,6 +1319,7 @@ async function mountPriceSettings() {
           <select id="parea">${c.areas.map((a) => `<option${a === d.area ? " selected" : ""}>${a}</option>`).join("")}</select></label>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+        ${field("ptimezone", "Price timezone", d.timezone, "E.g. Australia/Sydney, Australia/Brisbane or Australia/Adelaide", "text")}
         ${field("pvat", "Moms (%)", d.vat_pct, `Standard för ${esc(c.name)}: ${String(c.vat_pct).replace(".", ",")} %`)}
         ${field("pbuy", `Avgifter vid köp (${sym}/kWh, inkl. moms)`, d.buy_extra, "Nätöverföring + energiskatt + elhandlarens påslag")}
         ${field("psell", `Ersättning vid försäljning (${sym}/kWh)`, d.sell_extra, "Utöver spotpriset, t.ex. nätnytta")}
@@ -1384,7 +1389,8 @@ async function mountPriceSettings() {
     }
     document.getElementById("pcountry").onchange = (e) => {
       const k = e.target.value, cc = d.countries[k];
-      Object.assign(d, { country: k, area: cc.areas[0], vat_pct: cc.vat_pct, currency: cc.currency, symbol: cc.currency === "EUR" ? "€" : cc.currency === "GBP" ? "£" : cc.currency === "PLN" ? "zł" : cc.currency === "CZK" ? "Kč" : "kr",
+      Object.assign(d, { country: k, area: cc.areas[0], vat_pct: cc.vat_pct, currency: cc.currency, symbol: cc.symbol, timezone: cc.timezone,
+
         buy_extra: k === "SE" ? 0.62675 : 0, sell_extra: k === "SE" ? 0.02125 : 0 });
       draw();
       mountPriceSource("pricesrc", d.country);
@@ -1393,9 +1399,10 @@ async function mountPriceSettings() {
     document.getElementById("psave").onclick = async () => {
       const v = (id) => (document.getElementById(id) || {}).value;
       try {
-        await postJSON("api/price-settings", { country: v("pcountry"), area: v("parea"), vat_pct: v("pvat"), buy_extra: v("pbuy"),
+        await postJSON("api/price-settings", { country: v("pcountry"), area: v("parea"), timezone: v("ptimezone"), vat_pct: v("pvat"), buy_extra: v("pbuy"),
           buy_mode: v("pbuymode"), buy_fixed: v("pbuyfixed"), sell_mode: v("psellmode"), sell_fixed: v("psellfixed"),
           hdo_entity: v("phdo"), distribution_nt: v("pnt"), distribution_vt: v("pvt"),
+
           sell_extra: v("psell"), sell_vat: document.getElementById("psellvat").checked,
           tou_extra: v("ptou"), tou_hours: v("ptouh"), tou_months: v("ptoum"), tou_weekdays: document.getElementById("ptouwd").checked,
           power_high: { choice: v("phchoice"), hours: v("phh"), months: v("phm"), weekdays: document.getElementById("phwd").checked } });
@@ -1428,9 +1435,19 @@ async function mountPriceSource(slotId, country) {
         Energi Data Service (Danmark) eller Octopus Energy (Storbritannien) i Home Assistant och skanna igen.`}</div>
     <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="psrcvat"${d.includes_vat ? " checked" : ""}>
       Priset i sensorn är redan inklusive moms (Nord Pool och Octopus brukar vara det, ENTSO-e och EPEX inte)</label>
+    <label style="display:flex;flex-direction:column;gap:4px;margin-top:8px">Published prices
+      <select id="psrcfinal">
+        <option value="auto"${d.final === "auto" ? " selected" : ""}>Automatic (Amber refreshes every 5 minutes)</option>
+        <option value="true"${d.final === "true" ? " selected" : ""}>Final once published (day-ahead prices)</option>
+        <option value="false"${d.final === "false" ? " selected" : ""}>Refresh current and future prices every 5 minutes</option>
+      </select></label>
+    <label style="display:flex;flex-direction:column;gap:4px;margin-top:8px">Current price sensor (optional)
+      <input id="psrccurrent" value="${esc(d.current_entity || "")}" placeholder="sensor.amber_general_price">
+      <span class="note">Use the current price, not the forecast. Amber's matching _price sensor is tried automatically; select it here if renamed.</span></label>
     <button class="icobtn" id="psrcsave" style="margin-top:8px">Använd priskällan</button>`;
   slot.querySelector("#psrcsave").onclick = async () => {
-    try { await postJSON("api/price-source", { ha_entity: slot.querySelector("#psrc").value, includes_vat: slot.querySelector("#psrcvat").checked });
+    try { await postJSON("api/price-source", { ha_entity: slot.querySelector("#psrc").value, includes_vat: slot.querySelector("#psrcvat").checked,
+      final: slot.querySelector("#psrcfinal").value, current_entity: slot.querySelector("#psrccurrent").value });
       toast("Priskällan sparad - priserna hämtas om inom en minut"); }
     catch (e) { toast(e.message); }
   };
@@ -1793,7 +1810,7 @@ async function renderInstallningar() {
     if (last && last.ok && document.getElementById("discoverResults")) {
       await runDiscovery(null, { d: last });
       const r = document.getElementById("discoverResults"), at = new Date((last.scanned_at || 0) * 1000);
-      if (r) r.insertAdjacentHTML("afterbegin", `<div class="note" style="margin-bottom:8px">Senaste skanningen ${at.toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. Kryssa i det som stämmer och tryck <b>Spara och starta</b> – det som är sparat är det EnergyWizard använder. Tryck Skanna för att söka igen.</div>`);
+      if (r) r.insertAdjacentHTML("afterbegin", `<div class="note" style="margin-bottom:8px"><span>Senaste skanningen</span> ${at.toLocaleString((window.I18N && I18N.lang) || "sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. <span>Kryssa i det som stämmer och tryck</span> <b>Spara och starta</b> – <span>det som är sparat är det EnergyWizard använder. Tryck Skanna för att söka igen.</span></div>`);
     }
   } catch (e) {}
   document.getElementById("scanmodbusbtn").onclick = runModbusScan;
@@ -2187,6 +2204,8 @@ async function boot() {
     if (!me.role) { showLogin(); return; }
     hideSetup();
     PAGES = me.pages;
+    moneyCurrency = me.currency || "SEK";
+    moneySymbol = me.currency_symbol || "kr";
     if (st && me.role === "owner" && !st.ha_ok && !st.supervisor) { setupHA(total, st.ha_url); return; }
     showShell();
     if (me.role === "owner") showSponsorBanner();

@@ -334,7 +334,7 @@ async def shadow_set(request: Request):
 
 
 _PRICE_KEYS = ("price_country", "price_area", "price_vat_pct", "price_buy_extra", "price_sell_extra", "price_sell_vat",
-               "price_currency", "price_ha_entity", "price_tou_extra", "price_tou_hours", "price_tou_months", "price_tou_weekdays",
+               "price_currency", "price_timezone", "price_final", "price_current_entity", "price_ha_entity", "price_tou_extra", "price_tou_hours", "price_tou_months", "price_tou_weekdays",
                "price_buy_mode", "price_buy_fixed", "price_sell_mode", "price_sell_fixed",
                "price_hdo_entity", "price_distribution_nt", "price_distribution_vt")
 
@@ -352,7 +352,8 @@ async def price_settings_get():
                   "weekdays": w["weekdays"] if w["source"] == "egen" else True}
     return {"ok": True, **c, "power_high": power_high, "source": nordpool.price_source(),
             "ha_entity": ew_settings.get("price_ha_entity") or "sensor.nordpool",
-            "countries": {k: {"name": v["name"], "vat_pct": v["vat_pct"], "currency": v["currency"], "areas": v["areas"]}
+            "countries": {k: {"name": v["name"], "vat_pct": v["vat_pct"], "currency": v["currency"], "symbol": nordpool.CURRENCY_SYMBOL.get(v["currency"], v["currency"]),
+                               "timezone": v.get("timezone", "Europe/Stockholm"), "areas": v["areas"]}
                           for k, v in nordpool.COUNTRIES.items()},
             # Räkneexempel för spotpris 1,00 exkl. moms: samma formel som nordpool.full_buy_cost/full_sell_income
             "example": {"spot": 1.0, "buy": round(nordpool.full_buy_cost(1.0 * (1 + c["vat_pct"] / 100) if nordpool.prices_include_vat() else 1.0), 4),
@@ -399,7 +400,10 @@ async def price_entities():
     if not selected and nordpool.price_source() == "ha_nordpool":       # vald via miljön (PRICE_SOURCE/NORDPOOL_HA_ENTITY)
         selected = os.environ.get("NORDPOOL_HA_ENTITY", "sensor.nordpool")
     return {"ok": True, "entities": out, "selected": selected,
-            "includes_vat": nordpool.prices_include_vat()}
+            "final": nordpool.price_final_mode(),
+            "current_entity": ew_settings.get("price_current_entity") or "",
+            "includes_vat": nordpool.prices_include_vat() if nordpool.price_source() == "ha_nordpool" else
+            str(ew_settings.get("price_includes_vat", nordpool.cost_settings()["country"] != "CZ")).lower() not in ("0", "false", "nej", "no")}
 
 
 # ---- Aviseringar till vilken telefon (issue #123: förut den första mobile_app_* i HA - kunde vara fel persons) ----
@@ -663,7 +667,15 @@ async def price_source_set(request: Request):
     if ent and not re.fullmatch(r"(sensor|event)\.[a-z0-9_]+", ent):
         return JSONResponse({"error": "Ogiltig entitet"}, status_code=400)
     import nordpool
-    ew_settings.update(price_ha_entity=ent or None, price_includes_vat=bool(body.get("includes_vat", nordpool.cost_settings()["country"] != "CZ")))
+    mode = str(body.get("final", "auto")).lower()
+    if mode not in ("auto", "true", "false"):
+        return JSONResponse({"error": "Invalid price finality"}, status_code=400)
+    current = str(body.get("current_entity") or "").strip()
+    if current and not re.fullmatch(r"sensor\.[a-z0-9_]+", current):
+        return JSONResponse({"error": "Invalid current price entity"}, status_code=400)
+    ew_settings.update(price_ha_entity=ent or None, price_includes_vat=bool(body.get("includes_vat", nordpool.cost_settings()["country"] != "CZ")),
+                       price_final=mode, price_current_entity=current or None)
+
     return {"ok": True}
 
 
@@ -683,6 +695,13 @@ async def price_settings_set(request: Request):
     if country not in nordpool.COUNTRIES:
         return JSONResponse({"error": "Okänt land"}, status_code=400)
     upd["price_country"] = country
+    if "timezone" in body:
+        tz = str(body.get("timezone") or nordpool.COUNTRIES[country].get("timezone", "Europe/Stockholm"))
+        try:
+            zoneinfo.ZoneInfo(tz)
+        except (ValueError, zoneinfo.ZoneInfoNotFoundError):
+            return JSONResponse({"error": "Invalid timezone"}, status_code=400)
+        upd["price_timezone"] = tz
     area = str(body.get("area") or "").upper()
     upd["price_area"] = area if area in nordpool.COUNTRIES[country]["areas"] else nordpool.COUNTRIES[country]["areas"][0]
     for key, field, lo, hi in (("price_vat_pct", "vat_pct", 0, 50), ("price_buy_extra", "buy_extra", -5, 50), ("price_sell_extra", "sell_extra", -5, 50)):
@@ -767,7 +786,10 @@ async def me(request: Request):
     pages = [p for p in PAGES if p["built"] and p["id"] not in hidden]
     if TELEMETRY_STATS_URL and role == "owner":       # bara utvecklarens egen server, bara ägaren
         pages.insert(len(pages) - 1, INSTALLS_PAGE)
-    return {"role": role, "user": user, "pages": pages}
+    import nordpool
+    c = nordpool.cost_settings()
+    return {"role": role, "user": user, "pages": pages,
+            "currency": c["currency"], "currency_symbol": c["symbol"]}
 
 
 @app.get("/api/ping")

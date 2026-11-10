@@ -1,5 +1,6 @@
 import os
 import math
+import time
 import requests
 import psycopg
 from datetime import datetime, timedelta, timezone
@@ -53,8 +54,10 @@ COUNTRIES = {
     "PL": {"name": "Polen", "vat_pct": 23.0, "currency": "PLN", "areas": ["PL"]},
     "CZ": {"name": "Česko", "vat_pct": 21.0, "currency": "CZK", "areas": ["CZ"]},
     "GB": {"name": "Storbritannien", "vat_pct": 5.0, "currency": "GBP", "areas": ["GB"]},
+    "AU": {"name": "Australia", "vat_pct": 10.0, "currency": "AUD", "areas": ["AU"],
+           "timezone": "Australia/Sydney"},
 }
-CURRENCY_SYMBOL = {"SEK": "kr", "NOK": "kr", "DKK": "kr", "EUR": "€", "PLN": "zł", "GBP": "£", "CZK": "Kč"}
+CURRENCY_SYMBOL = {"SEK": "kr", "NOK": "kr", "DKK": "kr", "EUR": "€", "PLN": "zł", "GBP": "£", "CZK": "Kč", "AUD": "A$"}
 
 
 def _setting(key, env, default=None):
@@ -84,6 +87,7 @@ def cost_settings() -> dict:
     currency = str(_setting("price_currency", "PRICE_CURRENCY", preset.get("currency", "EUR"))).upper()
     return {
         "country": country, "area": area, "currency": currency, "symbol": CURRENCY_SYMBOL.get(currency, currency),
+        "timezone": price_timezone_name(country),
         "vat_pct": _num(_setting("price_vat_pct", "PRICE_VAT_PCT"), preset.get("vat_pct", 0.0)),
         "buy_extra": _num(_setting("price_buy_extra", "PRICE_BUY_EXTRA"), preset.get("buy_extra", 0.0)),
         "sell_extra": _num(_setting("price_sell_extra", "PRICE_SELL_EXTRA"), preset.get("sell_extra", 0.0)),
@@ -102,6 +106,37 @@ def cost_settings() -> dict:
         "tou_months": _span_setting(_setting("price_tou_months", "PRICE_TOU_MONTHS", "11-3"), (11, 3), 1, 12),
         "tou_weekdays": str(_setting("price_tou_weekdays", "PRICE_TOU_WEEKDAYS", "true")).lower() not in ("0", "false", "nej", "no"),
     }
+
+
+def price_timezone_name(country=None):
+    country = country or str(_setting("price_country", "PRICE_COUNTRY", "SE")).upper()
+    default = COUNTRIES.get(country, {}).get("timezone", "Europe/Stockholm")
+    name = str(_setting("price_timezone", "PRICE_TIMEZONE", default))
+    try:
+        zoneinfo.ZoneInfo(name)
+    except (ValueError, zoneinfo.ZoneInfoNotFoundError):
+        return default
+    return name
+
+
+def price_timezone():
+    return zoneinfo.ZoneInfo(price_timezone_name())
+
+
+def price_final_mode():
+    """auto detects Amber forecasts; true freezes published prices, false refreshes them."""
+    value = str(_setting("price_final", "PRICE_FINAL", "auto")).lower()
+    return value if value in ("true", "false") else "auto"
+
+
+HA_REFRESH_SECONDS = 300
+_ha_refresh_state = {}
+
+
+def _ha_source_key():
+    c = cost_settings()
+    return (tuple(_price_entities()), c["country"], c["area"], c["timezone"], price_final_mode(),
+            str(_setting("price_current_entity", "PRICE_CURRENT_ENTITY", "")))
 
 
 def _span_setting(v, default, lo, hi):
@@ -129,7 +164,7 @@ def tou_extra_at(t, c=None) -> float:
     if not c["tou_extra"] or t is None:
         return 0.0
     from zoneinfo import ZoneInfo
-    lt = t.astimezone(ZoneInfo("Europe/Stockholm")) if getattr(t, "tzinfo", None) else t
+    lt = t.astimezone(ZoneInfo(c.get("timezone", "Europe/Stockholm"))) if getattr(t, "tzinfo", None) else t
     if c["tou_weekdays"] and lt.weekday() >= 5:
         return 0.0
     if not _in_span(lt.month, c["tou_months"], True) or not _in_span(lt.hour, c["tou_hours"], False):
@@ -190,7 +225,7 @@ def is_high_load_time(dt, w=None) -> bool:
     w = w or high_load_window()
     if w["source"] == "av" or dt is None:
         return False
-    lt = dt.astimezone(SWE_TZ) if getattr(dt, "tzinfo", None) else dt
+    lt = dt.astimezone(price_timezone()) if getattr(dt, "tzinfo", None) else dt
     if w["weekdays"] and lt.weekday() >= 5:
         return False
     return _in_span(lt.month, w["months"], True) and _in_span(lt.hour, w["hours"], False)
@@ -231,7 +266,8 @@ def full_sell_income(spot: float) -> float:
 def _sql_tou(c, tcol):
     if not c["tou_extra"] or not tcol:
         return ""
-    lt = f"({tcol} AT TIME ZONE 'Europe/Stockholm')"
+    tz = c.get("timezone", "Europe/Stockholm").replace("'", "''")
+    lt = f"({tcol} AT TIME ZONE '{tz}')"
     (ha, hb), (ma, mb) = c["tou_hours"], c["tou_months"]
     hour = f"EXTRACT(HOUR FROM {lt})"
     month = f"EXTRACT(MONTH FROM {lt})"
@@ -278,6 +314,9 @@ def init_db():
         print(f"❌ Kunde inte initiera databasen: {e}")
 
 def fetch_api_and_save(date_obj):
+    if cost_settings()["country"] != "SE":
+        print("⚠️ elprisetjustnu.se only supplies Swedish prices; select a Home Assistant price sensor.")
+        return False
     date_str = date_obj.strftime("%Y/%m-%d")
     area = cost_settings()["area"] if cost_settings()["area"] in COUNTRIES["SE"]["areas"] else "SE3"
     url = f"https://www.elprisetjustnu.se/api/v1/prices/{date_str}_{area}.json"
@@ -326,7 +365,7 @@ def _parse_ts(v):
         t = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
     except (TypeError, ValueError):
         return None
-    return t if t.tzinfo else t.replace(tzinfo=SWE_TZ)
+    return t if t.tzinfo else t.replace(tzinfo=price_timezone())
 
 
 def _unit_divisor(unit: str, key: str = "") -> float:
@@ -412,41 +451,110 @@ def _price_entities():
     return out
 
 
-def fetch_ha_nordpool_and_save(date_obj):
-    """Hämtar dygnets priser ur en prissensor i Home Assistant (vilken integration som helst som
-    parse_price_attributes() känner igen; standard sensor.nordpool) i stället för elprisetjustnu.se.
+def _amber_start(start, end):
+    # Amber's inclusive start is often :00:01 after an exclusive :00:00 end.
+    # Canonicalize only this one-second boundary on 5/30-minute Amber intervals.
+    if (start.second == 1 and start.microsecond == 0 and start.minute % 5 == 0
+            and end.second == 0 and end.microsecond == 0
+            and (end - start + timedelta(seconds=1)).total_seconds() in (300, 1800)):
+        return start - timedelta(seconds=1)
+    return start
 
-    Samma kontrakt som fetch_api_and_save: True/False, samma INSERT/ON CONFLICT-mönster
-    så nedströms-konsumenter (get_price_info, get_price_at) inte märker varifrån raderna
-    kom."""
+
+def _ha_state(entity):
     import homeassistant
+    response = requests.get(f"{homeassistant._BASE}/states/{entity}", headers=homeassistant._HEADERS,
+                            timeout=10, verify=homeassistant._VERIFY)
+    if response.status_code != 200:
+        print(f"⚠️ HA-prissensorn ({entity}) svarade {response.status_code}.")
+        return None
+    return response.json()
+
+
+def fetch_ha_nordpool_and_save(date_obj, refresh_all=False):
+    """Import HA prices. Fixed feeds insert once; refreshing feeds update uncompleted slots."""
     date_str = date_obj.strftime("%Y-%m-%d")
     try:
-        rows = []
+        points = {}
+        legacy_starts = []
+        dynamic = False
+        now = datetime.now(timezone.utc)
         for entity in _price_entities():
-            r = requests.get(f"{homeassistant._BASE}/states/{entity}", headers=homeassistant._HEADERS, timeout=10,
-                             verify=homeassistant._VERIFY)
-            if r.status_code != 200:
-                print(f"❌ HA-prissensorn ({entity}) svarade {r.status_code}.")
+            state = _ha_state(entity)
+            if state is None:
                 continue
-            attrs = r.json().get("attributes", {})
+            attrs = state.get("attributes") or {}
             unit = attrs.get("unit_of_measurement", "")
             if cost_settings()["country"] == "CZ" and not str(unit).lower().startswith(("czk/", "kč/")):
                 print(f"❌ Czech price sensor ({entity}) must use CZK/kWh or CZK/MWh; currency conversion is not automatic.")
                 continue
-            rows += parse_price_attributes(attrs, unit)
-        wanted = [(s.isoformat(), e.isoformat(), v) for s, e, v in rows if s.astimezone(SWE_TZ).date() == date_obj.date()]
+            amber = "forecasts" in attrs
+            refreshing = price_final_mode() == "false" or (price_final_mode() == "auto" and amber)
+            dynamic = dynamic or refreshing
+            rows = parse_price_attributes(attrs, attrs.get("unit_of_measurement", ""))
+            for start, end, value in rows:
+                if amber:
+                    canonical = _amber_start(start, end)
+                    if canonical != start:
+                        legacy_starts.append(start)
+                    start = canonical
+                if math.isfinite(value) and end > start:
+                    points[start] = (end, value)
+            # The forecast sensor's state is its first forecast, not the current actual price.
+            # Read the companion price sensor, or an explicitly selected current-price entity.
+            current_entity = _setting("price_current_entity", "PRICE_CURRENT_ENTITY", "")
+            if not current_entity and amber and entity.endswith("_forecast"):
+                current_entity = entity[:-len("_forecast")] + "_price"
+            if refreshing and current_entity:
+                try:
+                    current = _ha_state(current_entity)
+                    ca = (current or {}).get("attributes") or {}
+                    start, end = _parse_ts(ca.get("start_time")), _parse_ts(ca.get("end_time"))
+                    value = float((current or {}).get("state")) / _unit_divisor(ca.get("unit_of_measurement", ""))
+                    if start is not None and end is not None:
+                        if amber:
+                            start = _amber_start(start, end)
+                        if start <= now < end and math.isfinite(value):
+                            active = [key for key, (finish, _) in points.items() if key <= now < finish]
+                            if active:
+                                for key in active:
+                                    points[key] = (points[key][0], value)
+                            else:
+                                points[start] = (end, value)
+                except (TypeError, ValueError, requests.RequestException):
+                    # Unavailable actuals leave the latest forecast usable.
+                    pass
+        wanted = [(start.isoformat(), end.isoformat(), value) for start, (end, value) in sorted(points.items())
+                  if ((refresh_all and start.astimezone(price_timezone()).date() >= date_obj.date()) or
+                      (not refresh_all and start.astimezone(price_timezone()).date() == date_obj.date()))
+                  and (not dynamic or end > now)]
+
         if not wanted:
             print(f"⚠️ HA-prissensorn har inga priser för {date_str} (ännu).")
             return False
         with get_db() as conn:
             with conn.cursor() as cur:
-                cur.executemany("""
-                    INSERT INTO elpriser (time_start, time_end, sek_per_kwh)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (time_start) DO NOTHING
-                """, wanted)
+                if dynamic:
+                    if legacy_starts:
+                        # Replace active :00:01 keys imported by older versions, without
+                        # leaving overlapping stale forecasts or changing completed history.
+                        cur.execute("DELETE FROM elpriser WHERE time_start = ANY(%s) AND time_end > %s",
+                                    (legacy_starts, now))
+                    cur.executemany("""
+                        INSERT INTO elpriser (time_start, time_end, sek_per_kwh)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (time_start) DO UPDATE SET
+                            time_end = EXCLUDED.time_end, sek_per_kwh = EXCLUDED.sek_per_kwh
+                        WHERE elpriser.time_end > %s AND EXCLUDED.time_end > %s
+                    """, [(*row, now, now) for row in wanted])
+                else:
+                    cur.executemany("""
+                        INSERT INTO elpriser (time_start, time_end, sek_per_kwh)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (time_start) DO NOTHING
+                    """, wanted)
             conn.commit()
+        _ha_refresh_state[_ha_source_key()] = (time.monotonic(), dynamic)
         print(f"📥 Laddade ner {len(wanted)} rader för {date_str} från Home Assistant ({', '.join(_price_entities())}).")
         return True
     except Exception as e:
@@ -470,7 +578,7 @@ def _fetch_and_save(date_obj):
 
 
 def ensure_prices_exist():
-    now = datetime.now(SWE_TZ)
+    now = datetime.now(price_timezone())
     today    = now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow = today + timedelta(days=1)
     day_after = tomorrow + timedelta(days=1)
@@ -481,17 +589,28 @@ def ensure_prices_exist():
                 # Byte av land/elområde/källa: dagens och morgondagens priser hämtas om (annars ligger det gamla
                 # områdets priser kvar, ON CONFLICT DO NOTHING).
                 c = cost_settings()
-                key = f"{price_source()}:{c['country']}:{c['area']}:{_price_entities()}:{prices_include_vat()}"
+                key = f"{price_source()}:{c['country']}:{c['area']}"
+                if price_source() == "ha_nordpool":
+                    key += ":" + repr((tuple(_price_entities()), c["timezone"], prices_include_vat()))
                 try:
                     import ew_settings
                     if ew_settings.get("price_fetched_for") not in (None, key):
-                        cur.execute("DELETE FROM elpriser WHERE time_start >= %s", (today,))
+                        cur.execute("DELETE FROM elpriser WHERE time_end > %s", (now,))
                         conn.commit()
                         print(f"🔁 Elområde/källa ändrad ({ew_settings.get('price_fetched_for')} -> {key}) - hämtar om priserna.")
                     if ew_settings.get("price_fetched_for") != key:
                         ew_settings.update(price_fetched_for=key)
                 except Exception as e:
                     print(f"⚠️ Kunde inte kontrollera elområdet: {e}")
+                if price_source() == "ha_nordpool":
+                    cached = _ha_refresh_state.get(_ha_source_key())
+                    if cached is None or (cached[1] and time.monotonic() - cached[0] >= HA_REFRESH_SECONDS):
+                        # Probe once after startup, even if rows exist, to detect dynamic feeds.
+                        # Dynamic feeds refresh all available future days without a 13:30 gate.
+                        if fetch_ha_nordpool_and_save(today, refresh_all=True):
+                            return
+                    elif cached[1]:
+                        return
                 cur.execute("SELECT COUNT(*) FROM elpriser WHERE time_start >= %s AND time_start < %s", (today, tomorrow))
                 if cur.fetchone()[0] == 0:
                     print("⚠️ Saknar priser för idag. Hämtar från API...")
@@ -633,12 +752,37 @@ def calculate_day_strategy(all_prices, cheap_hours_count):
         "description": f"Optimerar (snitt {avg_p:.2f} kr, spread {spread:.2f} kr → hysteres {hysteresis:.2f} kr)"
     }
 
+def quarter_price_profile(rows, start, end):
+    """Time-weighted prices per elapsed quarter; fill missing coverage in memory only."""
+    if not rows:
+        return []
+    intervals = [(s.astimezone(timezone.utc), e.astimezone(timezone.utc), float(v))
+                 for s, e, v in rows if e is not None and e > s and v is not None]
+    if not intervals:
+        return []
+    cursor, finish = start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+    result = []
+    previous = intervals[0][2]
+    while cursor < finish:
+        stop = min(cursor + timedelta(minutes=15), finish)
+        weighted = seconds = 0.0
+        for left, right, value in intervals:
+            overlap = max(0.0, (min(stop, right) - max(cursor, left)).total_seconds())
+            weighted += overlap * value
+            seconds += overlap
+        if seconds:
+            previous = weighted / seconds
+        result.append(previous)
+        cursor = stop
+    return result
+
+
 def get_price_info(cheap_hours_count=8):
     """Huvudfunktion: returnerar (current_price, dynamic_limit, strategy, all_prices)."""
     init_db()
     ensure_prices_exist()
 
-    now = datetime.now(SWE_TZ)
+    now = datetime.now(price_timezone())
     today_start    = now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_start = today_start + timedelta(days=1)
     cheap_quarters_count = cheap_hours_count * 4
@@ -660,11 +804,12 @@ def get_price_info(cheap_hours_count=8):
                 # vara tidssorterad. Prisrankning (cheap hours / dynamic_limit) görs separat via
                 # sorted(...) i calculate_day_strategy och är därför opåverkad.
                 cur.execute("""
-                    SELECT sek_per_kwh FROM elpriser
-                    WHERE time_start >= %s AND time_start < %s
+                    SELECT time_start, time_end, sek_per_kwh FROM elpriser
+                    WHERE time_end > %s AND time_start < %s
                     ORDER BY time_start ASC
                 """, (today_start, tomorrow_start))
-                raw_prices = [float(r[0]) for r in cur.fetchall()]
+                day_rows = cur.fetchall()
+                raw_prices = [float(r[2]) for r in day_rows]
 
                 # FALLBACK (#2): saknas dagens priser helt → använd GÅRDAGENS prisprofil som
                 # approximation (in-memory, skrivs EJ till DB så riktiga priser kan ta över direkt).
@@ -682,13 +827,11 @@ def get_price_info(cheap_hours_count=8):
                         price_fallback = True
                         print("⚠️ Dagens priser saknas – använder GÅRDAGENS prisprofil som fallback.")
 
-                # Konvertera till 15-minuters array (96 slots) oavsett källa
-                all_prices = []
-                if 0 < len(raw_prices) <= 24:
-                    for p in raw_prices:
-                        all_prices.extend([p, p, p, p])
-                else:
-                    all_prices = raw_prices
+                # Planner consumers index by quarter; 5-minute forecasts must not be
+                # mistaken for 288 quarters. Retain interval-weighted values and DST day length.
+                all_prices = quarter_price_profile(day_rows, today_start, tomorrow_start) if day_rows else []
+                if not all_prices and raw_prices:
+                    all_prices = [p for p in raw_prices for _ in range(4)] if len(raw_prices) <= 24 else raw_prices
 
                 # Härled aktuellt pris ur fallback-profilen om realtidspriset saknas
                 if current_price is None and price_fallback and all_prices:
