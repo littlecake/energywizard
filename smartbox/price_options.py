@@ -7,10 +7,10 @@ def extended_price_options(body):
     result = {}
     for field in ("buy_mode", "sell_mode"):
         if field in body:
-            if body[field] not in ("spot", "fixed"):
+            if body[field] not in (("spot", "fixed", "hdo") if field == "buy_mode" else ("spot", "fixed")):
                 raise ValueError(f"Ogiltigt värde: {field}")
             result["price_" + field] = body[field]
-    for field in ("buy_fixed", "sell_fixed", "distribution_nt", "distribution_vt"):
+    for field in ("buy_fixed", "sell_fixed", "distribution_nt", "distribution_vt", "buy_nt", "buy_vt"):
         if field in body:
             if body[field] in (None, ""):
                 result["price_" + field] = None
@@ -32,6 +32,15 @@ def extended_price_options(body):
     for side in ("buy", "sell"):
         if body.get(side + "_mode") == "fixed" and result.get("price_" + side + "_fixed") is None:
             raise ValueError("Ange ett fast pris när fast avtal är valt")
-    if result.get("price_hdo_entity") and any(result.get("price_distribution_" + tariff) is None for tariff in ("nt", "vt")):
+    if "hdo_price_source" in body:
+        if body["hdo_price_source"] not in ("manual", "ha"):
+            raise ValueError("Ogiltig priskälla för HDO")
+        result["price_hdo_price_source"] = body["hdo_price_source"]
+    if body.get("buy_mode") == "hdo":
+        if body.get("country") != "CZ" or not result.get("price_hdo_entity"):
+            raise ValueError("Välj Tjeckien och ett HDO-schema för NT/VT-priser")
+        if body.get("hdo_price_source", "manual") == "manual" and any(result.get("price_buy_" + tariff) is None for tariff in ("nt", "vt")):
+            raise ValueError("Ange båda slutpriserna för NT och VT")
+    elif body.get("country") in (None, "CZ") and result.get("price_hdo_entity") and any(result.get("price_distribution_" + tariff) is None for tariff in ("nt", "vt")):
         raise ValueError("Ange båda distributionsavgifterna när HDO används")
     return result

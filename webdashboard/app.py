@@ -336,7 +336,8 @@ async def shadow_set(request: Request):
 _PRICE_KEYS = ("price_country", "price_area", "price_vat_pct", "price_buy_extra", "price_sell_extra", "price_sell_vat",
                "price_currency", "price_ha_entity", "price_tou_extra", "price_tou_hours", "price_tou_months", "price_tou_weekdays",
                "price_buy_mode", "price_buy_fixed", "price_sell_mode", "price_sell_fixed",
-               "price_hdo_entity", "price_distribution_nt", "price_distribution_vt")
+               "price_hdo_entity", "price_distribution_nt", "price_distribution_vt",
+               "price_buy_nt", "price_buy_vt", "price_hdo_price_source")
 
 
 @app.get("/api/price-settings")
@@ -364,7 +365,8 @@ async def distribution_schedules():
     try:
         r = requests.get(f"{homeassistant._BASE}/states", headers=homeassistant._HEADERS, timeout=10, verify=homeassistant._VERIFY)
         r.raise_for_status()
-        entities = [{"entity_id": st["entity_id"], "name": (st.get("attributes") or {}).get("friendly_name") or st["entity_id"]}
+        entities = [{"entity_id": st["entity_id"], "name": (st.get("attributes") or {}).get("friendly_name") or st["entity_id"],
+                     "nt": st["attributes"].get("low_tariff_price"), "vt": st["attributes"].get("high_tariff_price")}
                     for st in r.json() if st.get("entity_id", "").startswith("sensor.")
                     and isinstance((st.get("attributes") or {}).get("schedule"), list)
                     and any(isinstance(row, dict) and row.get("tariff") in ("NT", "VT") for row in st["attributes"]["schedule"])]
@@ -677,6 +679,12 @@ async def price_settings_set(request: Request):
     from price_options import extended_price_options
     try:
         upd = extended_price_options(body)
+        if body.get("buy_mode") == "hdo" and body.get("hdo_price_source") == "ha":
+            from distribution_tariff import prices_for
+            rates = prices_for(upd["price_hdo_entity"])
+            if rates is None:
+                raise ValueError("ČEZ HDO saknar giltiga priser för NT och VT. Ange priserna manuellt eller konfigurera dem i integrationen.")
+            upd.update(price_buy_nt=rates[0], price_buy_vt=rates[1])
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
     country = str(body.get("country") or "SE").upper()

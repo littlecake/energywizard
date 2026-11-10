@@ -135,6 +135,61 @@ class CzechTariffs(unittest.TestCase):
                 extended_price_options(body)
         self.assertEqual(extended_price_options({"buy_mode": "fixed", "buy_fixed": 0})["price_buy_fixed"], 0)
 
+    def test_final_hdo_purchase_avoids_double_fees_and_vat(self):
+        rows = self.hdo()
+        self.settings.update(price_buy_mode="hdo", price_buy_nt=3.2, price_buy_vt=6.1,
+                             price_buy_extra=4, price_tou_extra=5, price_includes_vat=False)
+        with patch.object(D, "schedule_for", return_value=rows):
+            for iso, expected in (("2026-11-10T07:59:59+01:00", 3.2), ("2026-11-10T08:00:00+01:00", 6.1)):
+                for spot in (-10, 1, 50):
+                    self.assertEqual(N.full_buy_cost(spot, datetime.fromisoformat(iso)), expected)
+            self.assertEqual(N.full_sell_income(2), 2)
+            expr = N.sql_buy_cost_expr("p", "t")
+            self.assertIn("THEN 3.2", expr)
+            self.assertIn("ELSE 6.1 END", expr)
+            self.assertNotIn("* 1.21", expr)
+            self.assertNotIn(" + 4", expr)
+
+    def test_final_hdo_purchase_missing_schedule_uses_higher_price(self):
+        self.settings.update(price_buy_mode="hdo", price_hdo_entity="sensor.hdo", price_buy_nt=6, price_buy_vt=3)
+        with patch.object(D, "schedule_for", return_value=[]):
+            self.assertEqual(N.full_buy_cost(-5), 6)
+            self.assertEqual(eval(N.sql_buy_cost_expr("p", "t")), 6)
+
+    def test_hdo_live_prices_and_saved_outage_fallback(self):
+        self.settings.update(price_buy_mode="hdo", price_hdo_price_source="ha", price_hdo_entity="sensor.hdo", price_buy_nt=3, price_buy_vt=6)
+        with patch.object(D, "prices_for", return_value=(4, 7)), patch.object(D, "schedule_for", return_value=[]):
+            self.assertEqual(N.full_buy_cost(1), 7)
+            self.assertEqual(eval(N.sql_buy_cost_expr("p", "t")), 7)
+        with patch.object(D, "prices_for", return_value=None), patch.object(D, "schedule_for", return_value=[]):
+            self.assertEqual(N.full_buy_cost(1), 6)
+
+    def test_hdo_prices_use_both_attributes_not_current_state(self):
+        from types import SimpleNamespace
+        attrs = {"low_tariff_price": 3.2, "high_tariff_price": 6.1, "schedule": []}
+        response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"state": "99", "attributes": attrs})
+        fake = SimpleNamespace(_BASE="http://ha/api", _HEADERS={}, _VERIFY=True,
+                               requests=SimpleNamespace(get=lambda *a, **k: response))
+        with patch.dict("sys.modules", {"homeassistant": fake}):
+            self.assertEqual(D.prices_for("sensor.hdo"), (3.2, 6.1))
+            for values in ((0, 0), (True, 3), (3, float("nan")), (None, 5)):
+                D._CACHE.clear()
+                attrs.update(low_tariff_price=values[0], high_tariff_price=values[1])
+                self.assertIsNone(D.prices_for("sensor.hdo"))
+
+    def test_hdo_purchase_validation(self):
+        valid = {"country": "CZ", "buy_mode": "hdo", "hdo_entity": "sensor.hdo", "buy_nt": "3,2", "buy_vt": 6}
+        self.assertEqual(extended_price_options(valid)["price_buy_nt"], 3.2)
+        self.assertEqual(extended_price_options({**valid, "hdo_price_source": "ha", "buy_nt": "", "buy_vt": ""})["price_hdo_price_source"], "ha")
+        for change in ({"country": "SE"}, {"hdo_entity": ""}, {"buy_nt": ""}, {"buy_vt": "nan"},
+                       {"hdo_price_source": "unknown"}, {"sell_mode": "hdo"}):
+            with self.assertRaises(ValueError):
+                extended_price_options({**valid, **change})
+
+    def test_leaving_czech_hdo_preserves_other_country_settings(self):
+        body = {"country": "SE", "buy_mode": "spot", "hdo_entity": "sensor.hdo", "distribution_nt": "", "distribution_vt": ""}
+        self.assertEqual(extended_price_options(body)["price_buy_mode"], "spot")
+
     def test_input_validation(self):
         for body in ({"distribution_nt": "nan"}, {"distribution_vt": -1}, {"buy_fixed": "inf"},
                      {"buy_mode": "oops"}, {"hdo_entity": "sensor.x'"}):

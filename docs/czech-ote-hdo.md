@@ -21,6 +21,24 @@ retried by the existing price refresh loop; it is never replaced with Swedish da
 
 ## Contracts and distribution
 
+For Czechia, buying has three modes: **spot**, **fixed energy price**, and
+**final NT/VT price according to HDO**. The HDO mode always requires a future
+schedule. Users choose either two manually entered final prices or both rates
+published by the ČEZ HDO schedule sensor (`low_tariff_price`, `high_tariff_price`).
+The instantaneous current-price sensor is never projected into the future.
+In this mode prices already include VAT, distribution and supplier fees; no
+common buy fees, distribution adders, time-of-use surcharge or VAT is added again.
+The two integration rates are validated and saved when settings are saved, used
+as an outage fallback, and refreshed from HA during normal operation. Both zero
+integration rates are treated as unconfigured; explicit manual zero rates remain
+possible. Outside schedule coverage the higher rate is used. Export is unchanged.
+
+Only Czechia exposes HDO settings. The embedded installation guide links to the
+ČEZ HDO repository, HACS/Marketplace, and the integration's configuration guide.
+It opens automatically if no compatible schedule is found. The integration
+supports ČEZ Distribuce supply points; schedules from other distributors are not
+currently supported. No installation or HA restart is performed automatically.
+
 Buy and sell can independently use spot or a fixed price. Fixed buy is the energy
 component including VAT. Existing buy fees are added, then optional HDO distribution
 and the existing time-of-use surcharge. Fixed sell is the final contract price; the
@@ -49,7 +67,7 @@ of unrelated integrations. The fixed-price and distribution options are optional
 
 ## Validation
 
-`python3 scripts/test_cz_tariffs_without_db.py` runs 15 focused unittest cases
+`python3 scripts/test_cz_tariffs_without_db.py` runs 22 focused unittest cases
 against the real tariff/parser code, stubbing unused database imports only.
 In the full project environment, run `PYTHONPATH=smartbox python -m unittest discover
 -s tests -p test_cz_tariffs.py`, and the existing price-country, source, VAT and

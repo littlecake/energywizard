@@ -89,6 +89,9 @@ def cost_settings() -> dict:
         "sell_extra": _num(_setting("price_sell_extra", "PRICE_SELL_EXTRA"), preset.get("sell_extra", 0.0)),
         "buy_mode": str(_setting("price_buy_mode", "PRICE_BUY_MODE", "spot")),
         "buy_fixed": _num(_setting("price_buy_fixed", "PRICE_BUY_FIXED"), None),
+        "buy_nt": _num(_setting("price_buy_nt", "PRICE_BUY_NT"), None),
+        "buy_vt": _num(_setting("price_buy_vt", "PRICE_BUY_VT"), None),
+        "hdo_price_source": str(_setting("price_hdo_price_source", "PRICE_HDO_PRICE_SOURCE", "manual")),
         "sell_mode": str(_setting("price_sell_mode", "PRICE_SELL_MODE", "spot")),
         "sell_fixed": _num(_setting("price_sell_fixed", "PRICE_SELL_FIXED"), None),
         "hdo_entity": str(_setting("price_hdo_entity", "PRICE_HDO_ENTITY", "")),
@@ -209,6 +212,9 @@ def full_buy_cost(spot: float, t=None) -> float:
     """Verklig köpkostnad per kWh inkl moms, nätöverföring och skatt (i landets valuta). Dubbelräknar aldrig
     moms oavsett vilken bas spotpriset har. Med t (timmens start) räknas tidstariffen in."""
     c = cost_settings()
+    if c["country"] == "CZ" and c["buy_mode"] == "hdo":
+        from distribution_tariff import purchase_at
+        return purchase_at(t, c)
     from distribution_tariff import distribution_at
     extra = c["buy_extra"] + tou_extra_at(t, c) + distribution_at(t, c)
     if c["buy_mode"] == "fixed":
@@ -245,6 +251,9 @@ def sql_buy_cost_expr(col: str, tcol: str | None = None) -> str:
     """Samma formel som SQL-uttryck (Postgres), för ställen som räknar i databasen
     istället för rad-för-rad i Python (pump_runtime.py, smartdashboard). tcol = tidskolumnen (tidstariffen)."""
     c = cost_settings()
+    if c["country"] == "CZ" and c["buy_mode"] == "hdo":
+        from distribution_tariff import sql_purchase_expr
+        return sql_purchase_expr(tcol, c)
     from distribution_tariff import sql_distribution_expr
     tou = _sql_tou(c, tcol) + sql_distribution_expr(tcol, c)
     if c["buy_mode"] == "fixed":
