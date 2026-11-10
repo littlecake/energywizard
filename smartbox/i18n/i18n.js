@@ -61,10 +61,44 @@
     });
   }
 
+  // Named values complement numeric #: translators can reorder names, currencies and addresses.
+  // Only catalog-declared, anchored templates are matched; captured values remain unchanged.
+  const templateCache = new WeakMap();
+  function namedLookup(core) {
+    let templates = templateCache.get(dict);
+    if (!templates) {
+      templates = [];
+      const token = /\{([a-z][a-z0-9_]*)\}/gi;
+      const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      for (const [key, value] of Object.entries(dict)) {
+        if (typeof value !== "string" || !value || key.startsWith("_")) continue;
+        const parts = [...key.matchAll(token)];
+        if (!parts.length || parts.length > 8 || key.replace(token, "").trim().length < 4) continue;
+        const names = parts.map((p) => p[1]);
+        const targetNames = [...value.matchAll(token)].map((p) => p[1]);
+        if ([...new Set(names)].sort().join("|") !== [...new Set(targetNames)].sort().join("|")) continue;
+        let pattern = "^", at = 0;
+        for (const p of parts) { pattern += escape(key.slice(at, p.index)) + "(.+?)"; at = p.index + p[0].length; }
+        templates.push([new RegExp(pattern + escape(key.slice(at)) + "$", "u"), names, value]);
+      }
+      templateCache.set(dict, templates);
+    }
+    if (core.length > 1000) return null;
+    for (const [rx, names, value] of templates) {
+      const m = core.match(rx); if (!m) continue;
+      const params = Object.create(null); let valid = true;
+      names.forEach((name, i) => { if (params[name] !== undefined && params[name] !== m[i + 1]) valid = false; params[name] = m[i + 1]; });
+      if (valid) return value.replace(/\{([a-z][a-z0-9_]*)\}/gi, (_, name) => params[name]);
+    }
+    return null;
+  }
+
   function lookup(core) {
     if (dict[core] !== undefined && dict[core] !== "") return dict[core];
     const nums = core.match(NUM) || [], key = core.replace(NUM, "#");
     if (dict[key] !== undefined && dict[key] !== "") return fill(dict[key], nums);
+    const named = namedLookup(core);
+    if (named !== null) return named;
     for (const [re, fn] of RULES) { const m = core.match(re); if (m && lang === "en") return fn(m); }
     return null;
   }
@@ -182,3 +216,4 @@
     TRANSLATE_URL: "https://github.com/murre87/energywizard/blob/main/TRANSLATING.md",
   };
 })();
+
