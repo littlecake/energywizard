@@ -5,16 +5,20 @@ history is preserved below.
 
 ## Unreleased
 
-- Synchronize with upstream and retain the Czech tariff and personal shadow-mode packaging.
-- Compare current and scheduled purchase prices consistently for fixed and HDO contracts.
-- Validate the complete tariff configuration when settings are partially updated.
-- Support Czech fork version identifiers in the add-on version utility.
 
 - Document the contribution language policy: Czech, English and Swedish UI;
   English for non-localized diagnostics, technical documentation, commit messages
   and release notes.
 - Verify all 82 messages added by this fork in Czech, English and Swedish
   (246 translation checks).
+
+## 1.2.65-cz.6 (2026-11-10)
+
+- Synchronize with upstream and retain the Czech tariff and personal shadow-mode packaging.
+- Compare current and scheduled purchase prices consistently for fixed and HDO contracts.
+- Validate the complete tariff configuration when settings are partially updated.
+- Support Czech fork version identifiers in the add-on version utility.
+- Validate with the upstream PostgreSQL test suite.
 
 ## 1.2.65-cz.5 (2026-11-10)
 
