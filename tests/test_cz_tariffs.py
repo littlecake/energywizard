@@ -118,6 +118,15 @@ class CzechTariffs(unittest.TestCase):
             get.side_effect = OSError("offline")
             self.assertEqual(D.schedule_for("sensor.hdo"), [])
 
+    def test_blank_fields_never_become_zero(self):
+        self.assertIsNone(N.cost_settings()["buy_fixed"])
+        self.assertEqual(extended_price_options({"buy_mode": "spot", "buy_fixed": ""}), {"price_buy_mode": "spot", "price_buy_fixed": None})
+        for body in ({"buy_mode": "fixed", "buy_fixed": ""}, {"sell_mode": "fixed"},
+                     {"hdo_entity": "sensor.hdo", "distribution_nt": "", "distribution_vt": 1}):
+            with self.assertRaises(ValueError):
+                extended_price_options(body)
+        self.assertEqual(extended_price_options({"buy_mode": "fixed", "buy_fixed": 0})["price_buy_fixed"], 0)
+
     def test_input_validation(self):
         for body in ({"distribution_nt": "nan"}, {"distribution_vt": -1}, {"buy_fixed": "inf"},
                      {"buy_mode": "oops"}, {"hdo_entity": "sensor.x'"}):

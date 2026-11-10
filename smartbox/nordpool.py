@@ -88,12 +88,12 @@ def cost_settings() -> dict:
         "buy_extra": _num(_setting("price_buy_extra", "PRICE_BUY_EXTRA"), preset.get("buy_extra", 0.0)),
         "sell_extra": _num(_setting("price_sell_extra", "PRICE_SELL_EXTRA"), preset.get("sell_extra", 0.0)),
         "buy_mode": str(_setting("price_buy_mode", "PRICE_BUY_MODE", "spot")),
-        "buy_fixed": _num(_setting("price_buy_fixed", "PRICE_BUY_FIXED"), 0.0),
+        "buy_fixed": _num(_setting("price_buy_fixed", "PRICE_BUY_FIXED"), None),
         "sell_mode": str(_setting("price_sell_mode", "PRICE_SELL_MODE", "spot")),
-        "sell_fixed": _num(_setting("price_sell_fixed", "PRICE_SELL_FIXED"), 0.0),
+        "sell_fixed": _num(_setting("price_sell_fixed", "PRICE_SELL_FIXED"), None),
         "hdo_entity": str(_setting("price_hdo_entity", "PRICE_HDO_ENTITY", "")),
-        "distribution_nt": _num(_setting("price_distribution_nt", "PRICE_DISTRIBUTION_NT"), 0.0),
-        "distribution_vt": _num(_setting("price_distribution_vt", "PRICE_DISTRIBUTION_VT"), 0.0),
+        "distribution_nt": _num(_setting("price_distribution_nt", "PRICE_DISTRIBUTION_NT"), None),
+        "distribution_vt": _num(_setting("price_distribution_vt", "PRICE_DISTRIBUTION_VT"), None),
         "sell_vat": str(_setting("price_sell_vat", "PRICE_SELL_VAT", "false")).lower() in ("1", "true", "ja", "yes"),
         # Tidstariff (issue #98): extra nätavgift per kWh (inkl. moms) under höglasttid, t.ex. Ellevio/E.ON/Vattenfall
         # vardagar 06-22 november-mars. 0 = ingen tidstariff (som förut).

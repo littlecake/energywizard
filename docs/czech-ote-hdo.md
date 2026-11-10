@@ -42,14 +42,14 @@ the same half-open interval boundaries as the Python calculation. Historical
 intervals outside the available schedule conservatively use the higher rate;
 this is not an invoice reconstruction system.
 
-The existing time-of-use surcharge and demand-charge settings are preserved.
+The existing time-of-use surcharge and demand-charge settings are preserved. Blank prices are never turned into zero; enabling a fixed contract or HDO requires explicit price values.
 Other countries can keep their existing time-of-use schedules; this first adapter
 specifically supports the ČEZ HDO schedule format rather than guessing the formats
 of unrelated integrations. The fixed-price and distribution options are optional.
 
 ## Validation
 
-`python3 scripts/test_cz_tariffs_without_db.py` runs 14 focused unittest cases
+`python3 scripts/test_cz_tariffs_without_db.py` runs 15 focused unittest cases
 against the real tariff/parser code, stubbing unused database imports only.
 In the full project environment, run `PYTHONPATH=smartbox python -m unittest discover
 -s tests -p test_cz_tariffs.py`, and the existing price-country, source, VAT and
