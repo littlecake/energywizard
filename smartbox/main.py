@@ -1017,16 +1017,10 @@ while True:
                     print(f"⚠️ Solutsikt: {_se}")
                 _sun_cache["t"] = time.time()
 
-            # Byt ut statisk solprognos mot ML-Tvillingen
+            # The forecast already uses the selected HA source or learned fallback.
+            # Keep the profile for the clear-sky diagnostics below, without replacing
+            # an external forecast with the internal model a second time.
             solar_profile = learning.get_solar_profile()
-            if solar_profile:
-                roof_max_now = solar_profile.get((now.month, now.hour))
-                if roof_max_now is not None:
-                    solar_now = max(0.0, roof_max_now * (1.0 - (cloud_cover / 100.0) * 0.85))
-                next_dt = now + timedelta(minutes=15)
-                roof_max_next = solar_profile.get((next_dt.month, next_dt.hour))
-                if roof_max_next is not None:
-                    solar_next = max(0.0, roof_max_next * (1.0 - (cloud_cover / 100.0) * 0.85))
             
             solar_data   = solar_driver.read_production()
             ha_temps     = homeassistant.read_temperatures()

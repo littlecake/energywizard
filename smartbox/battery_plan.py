@@ -303,11 +303,16 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
     factor = settings.get("solar_factor") or {}          # inlärd rättning per timme (battery_learning.py)
 
     def solar_at(ts):
+        import ha_solar_forecast
+        external = ha_solar_forecast.power_at(ts)
+        if external is not None:
+            return external / 1000.0 * factor.get(ts.hour, 1.0)
+        # Keep the existing hourly internal model for uncovered periods.
         h = ts.replace(minute=0)
         if h not in solar_cache:
             try:
                 cloud, _, _, _ = weather.get_weather_at(h)
-                solar_cache[h] = (weather.get_smart_solar_w(cloud, h) or 0.0) / 1000.0 * factor.get(h.hour, 1.0)
+                solar_cache[h] = (weather.get_smart_solar_w(cloud, h, use_external=False) or 0.0) / 1000.0 * factor.get(h.hour, 1.0)
             except Exception:
                 solar_cache[h] = 0.0
         return solar_cache[h]

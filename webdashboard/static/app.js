@@ -682,14 +682,70 @@ async function renderSolceller() {
       <div class="numfield" style="margin-top:8px"><input type="range" id="solarlimit" min="0" max="100" step="5" value="${d.solar_limit_pct != null ? d.solar_limit_pct : 100}"><span id="solarlimitval" style="min-width:48px;text-align:right;font-weight:700">${d.solar_limit_pct != null ? d.solar_limit_pct.toFixed(0) : 100} %</span></div>
       <button class="icobtn" id="setsolarlimitbtn" style="margin-top:10px">Sätt gräns</button>
     </div>
+    <div class="card" id="solarforecastsettings" style="margin-bottom:16px"><h2>📈 Källa för solprognosen</h2><div class="note">Läser inställningarna för solprognosen…</div></div>
     <div class="card"><h2>Elpris</h2><div class="note">Styr när exportbegränsningen slår till (minuspris)</div><div id="solarpricechart" style="height:220px;margin-top:10px"></div></div>`);
   if (d && d.price_24h) lineChart("solarpricechart", d.price_24h, { step: "end" });
   if (d) {
+    renderSolarForecastSettings();
     const rangeEl = document.getElementById("solarlimit"), valEl = document.getElementById("solarlimitval");
     rangeEl.oninput = () => valEl.textContent = rangeEl.value + " %";
     document.getElementById("setsolarlimitbtn").onclick = () => postAction("api/energy-action/limit", { value: parseInt(rangeEl.value, 10) }).then(renderSolceller);
     document.getElementById("solarauto").onchange = (e) => postAction("api/energy-action/auto", { value: e.target.checked }).then(renderSolceller);
     document.getElementById("solarnotify").onchange = (e) => postAction("api/energy-action/notify", { value: e.target.checked });
+  }
+}
+
+async function renderSolarForecastSettings() {
+  const root = document.getElementById("solarforecastsettings");
+  if (!root) return;
+  try {
+    const d = await api("api/solar-forecast-settings");
+    if (!root.isConnected) return;
+    const statuses = {disabled: "Husets egen prognos används", ready: "Solcast-data finns tillgängliga",
+      partial: "Delvis Solcast-data; husets prognos används där data saknas",
+      unavailable: "Solcast-data saknas eller är för gamla; husets prognos används",
+      conflict: "Överlappande prognoser stämmer inte överens; husets prognos används"};
+    const candidates = new Map(d.candidates.map(c => [c.entity, c.name]));
+    d.entities.forEach(e => { if (!candidates.has(e)) candidates.set(e, e); });
+    root.innerHTML = `<h2>📈 Källa för solprognosen</h2>
+      <label for="solarforecastsource">Prognoskälla</label>
+      <select id="solarforecastsource"><option value="internal">Husets egen prognos</option><option value="solcast_ha">Solcast via Home Assistant</option></select>
+      <div class="note" style="margin-top:8px">${statuses[d.status] || statuses.unavailable}</div>
+      <div class="note" style="margin-top:8px">Välj de sammanlagda dygnssensorerna för idag, imorgon och kommande dagar. Välj inte både totalsensorer och enskilda takytor.</div>
+      <div id="solarforecastentities" style="margin-top:8px;display:grid;gap:8px">
+        ${[...candidates].map(([entity, name]) => `<label><input type="checkbox" value="${esc(entity)}" ${d.entities.includes(entity) ? "checked" : ""}> <span data-noi18n>${esc(name)} <small>${esc(entity)}</small></span></label>`).join("") || `<div class="note">Inga detaljerade Solcast-sensorer hittades i Home Assistant.</div>`}
+      </div>
+      <button class="icobtn" id="savesolarforecast" style="margin-top:12px">Spara prognoskälla</button>
+      <details style="margin-top:14px" ${!candidates.size ? "open" : ""}><summary>Så ställer du in Solcast</summary>
+        <ol class="note" style="line-height:1.6">
+          <li>Skapa ett Solcast-konto och konfigurera dina takytor, panelernas effekt, riktning och lutning.</li>
+          <li>Installera Solcast PV Solar Forecast i Home Assistant via HACS och lägg till integrationen under Inställningar → Enheter och tjänster.</li>
+          <li>Ange Solcast-nyckeln i Home Assistant. Nyckeln ska inte anges i EnergyWizard.</li>
+          <li>Aktivera detaljerade prognosattribut i integrationens alternativ och kontrollera att dygnssensorerna har detailedForecast eller detailedHourly.</li>
+          <li>Låt HA-integrationen sköta uppdateringar och API-gränser. EnergyWizard läser bara data som redan finns i Home Assistant.</li>
+          <li>Välj Solcast via Home Assistant ovan, markera dygnssensorerna och spara.</li>
+        </ol>
+        <a href="https://github.com/BJReplay/ha-solcast-solar#installation" target="_blank" rel="noopener">Installationsguide för Solcast-integrationen</a>
+        <span> · </span><a href="https://hacs.xyz/docs/use/" target="_blank" rel="noopener">Kom igång med HACS</a>
+        <div class="note" style="margin-top:8px">Om data saknas, är äldre än 36 timmar eller inte täcker en tidsperiod används husets befintliga prognos för den perioden. Uppmätt solel påverkas inte.</div>
+      </details>`;
+    const source = root.querySelector("#solarforecastsource");
+    source.value = d.source;
+    const refresh = () => root.querySelectorAll('input[type="checkbox"]').forEach(el => { el.disabled = source.value !== "solcast_ha"; });
+    source.onchange = refresh;
+    refresh();
+    root.querySelector("#savesolarforecast").onclick = async () => {
+      const button = root.querySelector("#savesolarforecast");
+      button.disabled = true;
+      try {
+        await postJSON("api/solar-forecast-settings", {source: source.value,
+          entities: [...root.querySelectorAll('input[type="checkbox"]:checked')].map(el => el.value)});
+        toast("Prognoskällan är sparad");
+        await renderSolarForecastSettings();
+      } catch (e) { toast(e.message); button.disabled = false; }
+    };
+  } catch (e) {
+    if (root.isConnected) root.innerHTML = `<h2>📈 Källa för solprognosen</h2><div class="note">${esc(e.message)}</div>`;
   }
 }
 

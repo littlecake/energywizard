@@ -107,7 +107,7 @@ def load(conn, now=None, cars=None):
         for k in range(0, 25):
             hh = q0.replace(minute=0) + timedelta(hours=k)
             cloud, _, _, _ = weather.get_weather_at(hh)
-            w = weather.get_smart_solar_w(cloud, hh)
+            w = weather.get_hourly_solar_w(cloud, hh)
             if w is not None:
                 solar[hh] = round(float(w))
     except Exception:
