@@ -1,3 +1,58 @@
+# Release notes
+
+This section documents the Czech fork in English. The original upstream release
+history is preserved below.
+
+## Unreleased
+
+- Document the contribution language policy: Czech, English and Swedish UI;
+  English for non-localized diagnostics, technical documentation, commit messages
+  and release notes.
+- Verify all 82 messages added by this fork in Czech, English and Swedish
+  (246 translation checks).
+
+## 1.2.65-cz.4 (2026-11-10)
+
+- Add a Czech purchase mode using final NT/VT prices and a future HDO schedule.
+- Let users enter both prices manually or read both configured rates from the
+  ČEZ HDO integration. Never project its instantaneous price over future periods.
+- Treat these as final prices including VAT, distribution and supplier fees.
+  Do not add the existing purchase fees, distribution or time-of-use surcharge again.
+- Use saved rates during an HA outage and the higher rate outside known schedule
+  coverage. Reject missing manual prices and unconfigured integration prices.
+- Add an in-app ČEZ HDO installation guide with HACS/Marketplace links. Open the
+  guide automatically when no compatible schedule is found.
+- Add corresponding English and Czech catalog entries; retain Swedish UI source text.
+- Validation: 22 tariff tests, 10 Python translation tests, 1,906 JavaScript checks
+  and focused form checks passed. The full upstream PostgreSQL suite was not run.
+
+## 1.2.65-cz.3 (2026-11-10)
+
+- Show and apply the ČEZ HDO adapter only when Czechia is selected.
+- Version the browser translation script by its content hash so an older cached
+  runtime cannot leave new currency labels in Swedish.
+- Verify switching between Sweden and Czechia in the running HA installation.
+
+## 1.2.65-cz.2 (2026-11-10)
+
+- Support named values in the existing browser and Python translation catalogs,
+  preserving device names and currency symbols.
+- Translate dynamic fee labels, contract selectors and HDO help text.
+- Hide fixed-price inputs when a spot contract is selected; keep blank prices unset.
+- Run focused Python checks as part of the fork add-on build.
+
+## 1.2.65-cz.1 (2026-11-10)
+
+- Add the Czech translation and language selector entry.
+- Add the Czech country preset, CZK/Kč and configurable 21% default VAT.
+- Read raw Czech OTE prices from Home Assistant, including quarter-hour and negative prices.
+- Support independent fixed/spot import and export contracts and optional ČEZ HDO
+  distribution rates using future NT/VT intervals.
+- Build the HA add-on from this fork with forced shadow mode and ingress access.
+  These deployment settings are specific to the fork, separate from upstream proposals.
+
+---
+
 # Ändringar
 
 ## 1.2.65 (2026-11-10)
