@@ -9,6 +9,67 @@ from unittest.mock import patch
 import discovery
 from discovery import discover_house
 
+
+def _hybrid_sensor(entity, name, unit="W", state="0", device="hybrid"):
+    return dict(e="sensor." + entity, n=name, d=device, dn="SolaX Inverter",
+                m="SolaX", mo="Hybrid", dc="power" if unit == "W" else "energy",
+                u=unit, st=state)
+
+
+def test_hybrid_pv_total_wins_over_grid_battery_and_strings_in_any_order():
+    """A hybrid inverter's grid import must not appear as sunshine at night."""
+    from itertools import permutations
+    sensors = [
+        _hybrid_sensor("energy_grid_solax_grid_import_solax_grid_export_net_power", "SolaX Grid Net Power", state="800"),
+        _hybrid_sensor("solax_battery_power", "SolaX Inverter Battery Power", state="500"),
+        _hybrid_sensor("solax_ac_power", "SolaX Inverter AC Power", state="500"),
+        _hybrid_sensor("solax_pv_power_1", "SolaX Inverter PV Power 1"),
+        _hybrid_sensor("solax_pv_power_total", "SolaX Inverter PV Power Total"),
+    ]
+    for ordered in permutations(sensors):
+        solar = discover_house(list(ordered))["solar"]
+        assert solar["pv_power_entity"] == "sensor.solax_pv_power_total"
+        assert solar["generic_suggestion"]["entities"]["pv_power_w"] == "sensor.solax_pv_power_total"
+
+
+def test_hybrid_daily_energy_is_solar_not_battery_or_grid():
+    sensors = [
+        _hybrid_sensor("solax_pv_power_total", "SolaX Inverter PV Power Total"),
+        _hybrid_sensor("solax_battery_output_energy_today", "SolaX Battery Output Energy Today", "kWh", "12"),
+        _hybrid_sensor("solax_today_s_import", "SolaX Inverter Today's Import", "kWh", "20"),
+        _hybrid_sensor("solax_today_s_yield", "SolaX Inverter Today's Yield", "kWh", "15"),
+        _hybrid_sensor("solax_today_s_solar_energy", "SolaX Inverter Today's Solar Energy", "kWh", "2"),
+    ]
+    for ordered in (sensors, list(reversed(sensors))):
+        assert discover_house(ordered)["solar"]["today_kwh_entity"] == "sensor.solax_today_s_solar_energy"
+
+
+def test_hybrid_without_pv_does_not_offer_grid_or_battery_as_solar():
+    for entity, name in [
+        ("solax_grid_power", "SolaX Inverter Grid Power"),
+        ("solax_battery_power", "SolaX Inverter Battery Power"),
+        ("solax_load_power", "SolaX Inverter Load Power"),
+    ]:
+        assert discover_house([_hybrid_sensor(entity, name)])["solar"] is None
+
+
+def test_solar_daily_energy_requires_a_shared_device():
+    sensors = [
+        _hybrid_sensor("pv_power", "PV Power", device=None),
+        _hybrid_sensor("solar_today", "Solar Energy Today", "kWh", device=None),
+    ]
+    assert discover_house(sensors)["solar"]["today_kwh_entity"] is None
+
+
+def test_solar_daily_energy_rejects_non_solar_measurements():
+    sensors = [_hybrid_sensor("pv_power", "PV Power")]
+    for entity, name in [
+        ("battery_today", "Battery Energy Today"),
+        ("grid_import_today", "Grid Import Today"),
+        ("grid_export_today", "Grid Export Today"),
+    ]:
+        assert discover_house(sensors + [_hybrid_sensor(entity, name, "kWh")])["solar"]["today_kwh_entity"] is None
+
 SYNTHETIC_ENTITIES = [
     # Tesla - battery + device_tracker
     {"e": "sensor.tesla_battery", "n": "Tesla Battery", "a": "Garage", "d": "dev_tesla", "dn": "Model Y",

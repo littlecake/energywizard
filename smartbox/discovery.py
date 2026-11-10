@@ -261,6 +261,25 @@ def _find(ents, domain, rx):
     return next((x for x in ents if x["e"].startswith(domain + ".") and _has(x.get("n") or x["e"], rx)), None)
 
 
+# Use measurement names, not the device's shared "inverter" label: hybrid
+# inverters expose grid, battery and load sensors on the very same device.
+_NOT_PV = re.compile(r"\b(grid|import|export|feed|battery|batteri|storage|charge|charging|discharge|discharging|load|consumption|reactive|apparent)\b", re.I)
+_PV_INPUT = re.compile(r"\b(pv|solar|sol|solel|photovolt\w*|mppt|dc|string)\b", re.I)
+_PV_TOTAL = re.compile(r"\b(total|combined|sum)\b", re.I)
+
+
+def _measurement_name(entity):
+    return re.sub(r"[_\W]+", " ", entity["e"].split(".", 1)[-1] + " " + (entity.get("n") or ""))
+
+
+def _solar_rank(entity):
+    name = _measurement_name(entity)
+    # Prefer explicit PV inputs, then retain the existing known-maker fallback.
+    # Stable ordering prevents HA's entity order from changing the suggestion.
+    return (bool(_PV_INPUT.search(name)), bool(_has(_candidate(entity), INVERTER_MAKERS)),
+            bool(_PV_TOTAL.search(name)), entity["e"])
+
+
 _CHG_W = re.compile(r"(storage|battery|batteri|batt)\w*[ _](charging|charge|laddning|laddar)[ _]power$|(storage|battery)_charging_power$", re.I)
 _DIS_W = re.compile(r"(storage|battery|batteri|batt)\w*[ _](discharging|discharge|urladdning|laddar[ _]ur)[ _]power$|(storage|battery)_discharging_power$", re.I)
 _NOT_W = re.compile(r"max|limit|rate|setpoint|target|total|energy|kwh", re.I)
@@ -565,14 +584,20 @@ def discover_house(entities: list[dict] | None = None) -> dict:
     # (telemetri 2026-11-07: solar:generic_number@Tibber#Price Sensor). Bara givare från en växelriktartillverkare
     # får komma från en sådan enhet.
     _meter_dev = re.compile(r"tibber|homewizard|husdata|easee equalizer|\bp1\b|\bhan\b|kaifa|aidon|kamstrup|landis", re.I)
-    power_sol = [e for e in power if not (_has(_candidate(e), _meter_dev) and not _has(_candidate(e), INVERTER_MAKERS))]
-    solar_e = next((e for e in power_sol if _has(e.get("n"), SOLAR) and _has(_candidate(e), INVERTER_MAKERS)), None) \
-        or next((e for e in power_sol if _has(e.get("n"), SOLAR) or _has(_candidate(e), INVERTER_MAKERS)), None)
+    power_sol = [e for e in power
+                 if not (_has(_candidate(e), _meter_dev) and not _has(_candidate(e), INVERTER_MAKERS))
+                 and not _NOT_PV.search(_measurement_name(e))
+                 and (_has(e.get("n"), SOLAR) or _PV_INPUT.search(_measurement_name(e))
+                      or _has(_candidate(e), INVERTER_MAKERS))]
+    solar_e = max(power_sol, key=_solar_rank, default=None)
     solar = None
     if solar_e:
         brand = next((b for b in _SOLAR_BRAND_TO_DRIVER if _has(_candidate(solar_e), re.compile(b, re.I))), None)
-        today_kwh = next((e for e in entities if e["e"].startswith("sensor.") and e.get("u") in ("kWh", "Wh")
-                           and e.get("d") == solar_e.get("d") and _has(e.get("n"), re.compile("today|idag|dag", re.I))), None)
+        today_kwh = max((e for e in entities if e["e"].startswith("sensor.") and e.get("u") in ("kWh", "Wh")
+                         and solar_e.get("d") and e.get("d") == solar_e["d"]
+                         and not _NOT_PV.search(_measurement_name(e))
+                         and _has(e.get("n"), re.compile("today|idag|dag", re.I))),
+                        key=_solar_rank, default=None)
         driver = _SOLAR_BRAND_TO_DRIVER.get(brand)
         if driver == "solaredge" and not any(e["e"] == _SOLAREDGE_LEGACY_LIMIT for e in entities):
             # Den handbyggda SolarEdge-drivrutinen pekar på entitetsnamn från en äldre HACS-integration.
