@@ -2048,6 +2048,43 @@ async def api_house_config_status(request: Request):
     return {"writable": role == "owner" and _config_writable()}
 
 
+@app.get("/api/solar-mapping")
+async def solar_mapping_get(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner" or not _config_writable():
+        return JSONResponse({"error": "Configuration unavailable"}, status_code=403)
+    import solar_mapping
+    try:
+        with open(HOUSE_CONFIG_FILE, encoding="utf-8") as f:
+            current = solar_mapping.inspect(f.read())
+        return {"ok": True, "entities": current}
+    except (OSError, ValueError):
+        return JSONResponse({"error": "Solar mapping is not supported"}, status_code=409)
+
+
+@app.post("/api/solar-mapping")
+async def solar_mapping_save(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner" or not _config_writable():
+        return JSONResponse({"error": "Configuration unavailable"}, status_code=403)
+    import solar_mapping
+    body = await request.json()
+    try:
+        with open(HOUSE_CONFIG_FILE, encoding="utf-8") as f:
+            old = f.read()
+        new = solar_mapping.replace(old, body.get("expected", {}), body.get("entities", {}))
+        if new != old:
+            with open(HOUSE_CONFIG_FILE, "r+", encoding="utf-8") as f:
+                if f.read() != old:
+                    raise ValueError("Solar configuration changed")
+                f.seek(0)
+                f.write(new)
+                f.truncate()
+        return {"ok": True}
+    except (OSError, ValueError, TypeError):
+        return JSONResponse({"error": "Could not update solar mapping"}, status_code=409)
+
+
 @app.post("/api/save-house-config")
 async def api_save_house_config(request: Request):
     role, _ = AUTH.session(request)

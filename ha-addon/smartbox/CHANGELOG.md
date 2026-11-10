@@ -12,6 +12,11 @@ history is preserved below.
 - Verify all 82 messages added by this fork in Czech, English and Swedish
   (246 translation checks).
 
+## 1.2.65-cz.7 (2026-11-10)
+
+- Prevent hybrid inverter grid, battery and load sensors from being suggested as solar production.
+- Allow an owner to update existing solar sensor mappings without replacing the rest of the house configuration.
+
 ## 1.2.65-cz.6 (2026-11-10)
 
 - Synchronize with upstream and retain the Czech tariff and personal shadow-mode packaging.
