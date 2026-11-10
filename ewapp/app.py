@@ -669,17 +669,20 @@ def api_flow(request: Request):
 
 @app.get("/api/state")
 def state(request: Request):
+    import nordpool
+    c = nordpool.cost_settings()
+    currency = {"currency": c["currency"], "currency_symbol": c["symbol"]}
     try:
         st = states()
     except Exception as e:
-        return {"ok": False, "role": _role(request), "error": f"Kan inte nå Home Assistant: {e}", "cars": [], "price": {}, "health": [f"Home Assistant svarar inte ({str(e)[:60]})"]}
+        return {**currency, "ok": False, "role": _role(request), "error": f"Kan inte nå Home Assistant: {e}", "cars": [], "price": {}, "health": [f"Home Assistant svarar inte ({str(e)[:60]})"]}
     ov = overrides()
     health = []
     for e in WATCH:
         v = val(st, e)
         if v is None:
             health.append(("Saknas i Home Assistant: " if e not in st else "Otillgänglig: ") + e)
-    return {"ok": True, "role": _role(request), "user": _session(request)[1], "ts": int(time.time()), "version": os.environ.get("APP_VERSION", "dev"), "cars": [car_state(k, st, ov) for k in CARS], "price": prices(), "health": health,
+    return {**currency, "ok": True, "role": _role(request), "user": _session(request)[1], "ts": int(time.time()), "version": os.environ.get("APP_VERSION", "dev"), "cars": [car_state(k, st, ov) for k in CARS], "price": prices(), "health": health,
             "solar_w": first_num(st, SOLAR["pv"])}
 
 

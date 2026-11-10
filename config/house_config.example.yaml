@@ -15,10 +15,15 @@ evs: []
 #   - id: min_bil                    # fri sträng, används som nyckel i scheman/loggar
 #     driver: generic_ev             # generic_ev funkar för praktiskt taget alla märken
 #     battery_kwh: 60
+#     max_charge_kw: 7.4               # valfri: effekten bilen faktiskt drar vid charger.max_a (ID.4 med tvåfasig
+#                                      # ombordladdare: 16 A = ~7,4 kW). Styr planens kW/kvart OCH kW->ampere till laddaren.
+#                                      # Utan den räknas 230 V x 1/3 faser som förut.
 #     entities:
 #       soc: sensor.min_bil_batteri        # valfri - saknas den, mata in SOC manuellt i appen istället
 #       plugged_in: binary_sensor.min_bil_kabel
 #       climate: climate.min_bil            # valfri
+#     charge_block: split              # split (standard: billigaste kvartarna var för sig) | single (ETT sammanhängande
+#                                      # laddfönster före avresan - färre start/stopp, något dyrare än split)
 #     charger:
 #       id: min_laddare
 #       driver: generic_charger      # eller t.ex. easee om du har en Easee-box

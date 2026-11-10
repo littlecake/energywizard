@@ -5,6 +5,11 @@ history is preserved below.
 
 ## Unreleased
 
+- Synchronize with upstream and retain the Czech tariff and personal shadow-mode packaging.
+- Compare current and scheduled purchase prices consistently for fixed and HDO contracts.
+- Validate the complete tariff configuration when settings are partially updated.
+- Support Czech fork version identifiers in the add-on version utility.
+
 - Document the contribution language policy: Czech, English and Swedish UI;
   English for non-localized diagnostics, technical documentation, commit messages
   and release notes.

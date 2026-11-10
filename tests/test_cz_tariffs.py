@@ -6,7 +6,7 @@ from unittest.mock import patch
 import distribution_tariff as D
 import ew_settings
 import nordpool as N
-from price_options import extended_price_options
+from price_options import extended_price_options, validate_result
 
 
 class CzechTariffs(unittest.TestCase):
@@ -53,6 +53,30 @@ class CzechTariffs(unittest.TestCase):
             self.assertAlmostEqual(N.full_buy_cost(p), 3.1)
             self.assertAlmostEqual(N.full_sell_income(p), p - .3)
             self.assertAlmostEqual(eval(N.sql_buy_cost_expr("p")), 3.1)
+
+    def test_planning_price_uses_contract_and_hdo(self):
+        now = datetime.fromisoformat("2026-11-10T07:00:00+01:00")
+        self.settings.update(price_buy_mode="fixed", price_buy_fixed=3, price_buy_extra=.1)
+        self.assertAlmostEqual(N.planning_buy_price(-5, now), N.planning_buy_price(10, now))
+        rows = self.hdo()
+        self.settings.update(price_buy_mode="hdo", price_buy_nt=2, price_buy_vt=4)
+        with patch.object(D, "schedule_for", return_value=rows):
+            cheap = N.planning_buy_price(100, now)
+            expensive = N.planning_buy_price(-100, now.replace(hour=9))
+            self.assertLess(cheap, expensive)
+            self.assertAlmostEqual(cheap, (2 - .1) / 1.21)
+
+    def test_partial_updates_preserve_valid_contract(self):
+        current = {"country": "CZ", "buy_mode": "fixed", "buy_fixed": 3,
+                   "sell_mode": "spot", "hdo_entity": ""}
+        with self.assertRaises(ValueError):
+            validate_result(current, {"price_buy_fixed": None})
+        validate_result(current, {"price_buy_fixed": 0})
+        current.update(buy_mode="hdo", hdo_entity="sensor.hdo", buy_nt=2, buy_vt=4)
+        with self.assertRaises(ValueError):
+            validate_result(current, {"price_hdo_entity": None})
+        with self.assertRaises(ValueError):
+            validate_result(current, {"price_buy_nt": None})
 
     def test_fixed_sell_is_final_contract_price(self):
         self.settings.update(price_sell_mode="fixed", price_sell_fixed=1.5, price_sell_extra=-.1)

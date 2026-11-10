@@ -12,8 +12,9 @@ const esc = (x) => String(x ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const buzz = (n = 15) => { try { navigator.vibrate && navigator.vibrate(n); } catch {} };
 // haptik: en liten vibration direkt när fingret nuddar en knapp (Android; iPhone saknar vibrations-API i webbläsaren, där ger tryckeffekten i CSS återkopplingen)
 document.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse" && e.target.closest("button, [data-a], [data-v], .tab, .sw")) buzz(8); }, { passive: true });
+const moneyUnit = () => (S && S.currency_symbol) || "kr";
 const f1 = (x, d = 1) => (x == null ? "–" : Number(x).toFixed(d).replace(".", window.I18N && I18N.lang === "en" ? "." : ","));
-function toast(t, ms = 2600) { const e = $("#toast"); e.textContent = t; e.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove("show"), ms); }
+function toast(t, ms = 2600) { const e = $("#toast"); e.textContent = window.I18N ? I18N.tr(t) : t; e.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove("show"), ms); }
 ["gesturestart", "gesturechange", "gestureend"].forEach((n) => document.addEventListener(n, (e) => e.preventDefault()));   // iOS: ingen pinch-zoom
 async function api(path, body) {
   const r = await fetch("api/" + path, body !== undefined ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
@@ -135,7 +136,7 @@ function planChart(p, cars) {
     const txt = !c.home ? "inte hemma" : !c.plugged ? "kabeln ej i" : pa ? `${pa.blocks[0].start}–${pa.blocks[pa.blocks.length - 1].end}${pa.summary && pa.summary.soc0 != null ? ` · ${pa.summary.soc0}→${pa.summary.soc1} %` : ""}` : full ? "fulladdad" : sunTxt ? `inget prisschema · solladdning väntas automatiskt ${sunTxt}` : "ingen laddning planerad";
     return `<div class="pc-lane"><span class="pc-name" style="color:${col}">${esc(c.name.split(" ")[0])}</span><div class="pc-track">${bars}${sunBar}</div><button class="pc-txt" data-a="cardata" data-c="${c.key}" title="Tryck för alla data">${esc(txt)}</button></div>`; }).join("");
   const nowAt = hs.length ? (Date.now() - t0) / span * 100 : 0;
-  return `<section class="card price pchart"><div class="head"><div><span class="note">Laddplan · elpris nu </span><span class="now">${f1(p.now, 2)} <small>kr/kWh</small></span></div><span class="chip ${p.level === "billigt" ? "ok" : p.level === "dyrt" ? "bad" : ""}">${esc(p.level || "")}</span></div>
+  return `<section class="card price pchart"><div class="head"><div><span class="note">Laddplan · elpris nu </span><span class="now">${f1(p.now, 2)} <small>${moneyUnit()}/kWh</small></span></div><span class="chip ${p.level === "billigt" ? "ok" : p.level === "dyrt" ? "bad" : ""}">${esc(p.level || "")}</span></div>
   <div class="pc-plot">${hasSun ? `<div class="pc-bars pc-sun" aria-hidden="true">${hs.map((h, k) => `<span><i style="height:${Math.round(sunH[k] / sunMax * 100)}%"></i></span>`).join("")}</div>` : ""}<div class="pc-bars">${hs.map((h) => `<span class="${h.now ? "now" : h.p <= lowT ? "low" : ""}"><i style="height:${Math.max(10, (h.p / mx) * 100)}%"></i></span>`).join("")}</div>${nowAt >= 0 && nowAt <= 100 ? `<b class="pc-now" style="left:${nowAt}%"></b>` : ""}</div>
   <div class="pc-lanes">${lanes}</div><div class="hrs pc-hrs">${hs.map((h, k) => `<span>${k % 4 === 0 ? h.t : ""}</span>`).join("")}</div>
   <div class="pc-legend"><span><i style="background:var(--line)"></i>elpris</span><span><i style="background:var(--acc)"></i>billig timme</span>${hasSun ? `<span><i style="background:rgba(251,191,36,.5)"></i>sol</span>` : ""}<span>· heldragen linje = bekräftad laddning</span><span>· randig linje = väntad solladdning, ej bekräftad</span></div></section>`;
@@ -169,7 +170,7 @@ function pageHus() {
   <section class="card tile wide"><h4>Spabad</h4><div class="v">${f1(sp.temp)}<small> °C</small></div><div class="note">Mål ${f1(sp.target)}° · ${esc(sp.heater || "")}${sp.error && sp.error !== "None" ? ` · ${esc(sp.error)}` : ""}</div>
     <div class="tilelink"><button class="link" data-a="spaready" style="padding:0;font-size:.82rem">${sp.ready_at ? `Klart ${esc(sp.ready_at)} (${f1(sp.ready_temp)}°) – ändra` : "Ställ in: klart kl…"}</button>${ROLE !== "guest" ? ` · <button class="link" data-a="spabath" style="padding:0;font-size:.82rem">Badtider${(sp.bath_windows || []).some((w) => w.on) ? ` (${(sp.bath_windows || []).filter((w) => w.on).length})` : ""}</button>` : ""}</div><div class="seg"><button data-a="spa" data-k="spa_auto" data-v="1" class="${!sp.force_heat && !sp.eco ? "on" : ""}" title="Följer sitt eget schema, som Home Assistant styr">Auto</button><button data-a="spa" data-k="spa_heat" data-v="${sp.force_heat ? 0 : 1}" class="${sp.force_heat ? "on" : ""}">Värm nu</button><button data-a="spa" data-k="spa_eco" data-v="${sp.eco ? 0 : 1}" class="${sp.eco ? "on" : ""}">Eco</button></div></section>
   <section class="card tile wide"><div style="display:flex;justify-content:space-between;align-items:baseline"><h4>Effekt nu</h4><span class="note">${pw.peak ? `Effektvakt på · gräns ${f1(pw.limit_kw)} kW` : "Effektvakt av"}</span></div><div class="v">${pw.total_w != null ? f1(pw.total_w / 1000) : "–"}<small> kW</small></div>
-    <div class="meter" ${pw.peak ? "" : 'style="opacity:.35"'}><i class="${pct > 85 ? "hi" : ""}" style="width:${pw.peak ? pct : 0}%"></i></div><div class="chips" style="justify-content:flex-start">${gridChip(pw)}${limitChip(pw)}<span class="chip">Elbil ${pw.ev_w != null ? f1(pw.ev_w / 1000) : "–"} kW</span><span class="chip ${pw.solar_w > 100 ? "ok" : ""}">Sol ${pw.solar_w != null ? f1(pw.solar_w / 1000) : "–"} kW</span><span class="chip ok">Sparat idag ${f1(pw.saving_today, 1)} kr</span></div></section>
+    <div class="meter" ${pw.peak ? "" : 'style="opacity:.35"'}><i class="${pct > 85 ? "hi" : ""}" style="width:${pw.peak ? pct : 0}%"></i></div><div class="chips" style="justify-content:flex-start">${gridChip(pw)}${limitChip(pw)}<span class="chip">Elbil ${pw.ev_w != null ? f1(pw.ev_w / 1000) : "–"} kW</span><span class="chip ${pw.solar_w > 100 ? "ok" : ""}">Sol ${pw.solar_w != null ? f1(pw.solar_w / 1000) : "–"} kW</span><span class="chip ok">Sparat idag ${f1(pw.saving_today, 1)} ${moneyUnit()}</span></div></section>
   </div></div>`;
 }
 // ---- levande bilder i energikorten: styrka avgör storlek, glöd och fart ------------------------------------------------------------------
@@ -190,7 +191,7 @@ const SVP = [["today", "Idag"], ["week", "7 d"], ["month", "Månad"]];
 function svLine() {                                       // besparingen på en rad – bara ägaren (servern svarar hidden för andra)
   if (!SV || !SV.ok) return "";
   const p = SV.periods[svPeriod] || SV.periods.week, pos = p.saved_kr >= 0;
-  return `<section class="card svline"><div><h4>Sparat genom smart tajmning</h4><div class="v" style="color:${pos ? "var(--acc)" : "var(--bad)"}">${p.saved_kr > 0 ? "+" : p.saved_kr < 0 ? "−" : ""}${f1(Math.abs(p.saved_kr), 0)}<small> kr${p.pct != null ? ` (${p.pct > 0 ? "+" : ""}${f1(p.pct, 0)} %)` : ""}</small></div></div>
+  return `<section class="card svline"><div><h4>Sparat genom smart tajmning</h4><div class="v" style="color:${pos ? "var(--acc)" : "var(--bad)"}">${p.saved_kr > 0 ? "+" : p.saved_kr < 0 ? "−" : ""}${f1(Math.abs(p.saved_kr), 0)}<small> ${moneyUnit()}${p.pct != null ? ` (${p.pct > 0 ? "+" : ""}${f1(p.pct, 0)} %)` : ""}</small></div></div>
     <div class="seg">${SVP.map(([k, l]) => `<button data-a="svp" data-v="${k}" class="${k === svPeriod ? "on" : ""}">${l}</button>`).join("")}</div></section>`;
 }
 function planNow() {                                   // vad görs nu och varför (per enhet, ur motorns beslut) + nästa steg i planen
@@ -249,18 +250,18 @@ function quickGrid(s, g, net, flowShown) {             // flowShown: nät och so
   tiles.push(qt('data-a="tab" data-v="hus"', "Inne", h.inside != null ? `${f1(h.inside)}<small>°C</small>` : "–",
     [h.target != null ? `mål ${f1(h.target, 0)}°` : "", h.mode ? (MODE_TXT[h.mode] || h.mode.toLowerCase()) : ""].filter(Boolean).join(" · ")));
   if (!flowShown) tiles.push(qt('data-a="insights"', "Nät", net == null ? "–" : `${net < -50 ? "−" : ""}${f1(Math.abs(net) / 1000)}<small> kW</small>`,
-    `${net == null ? "" : net < -50 ? "säljer" : "köper"}${g.price != null ? ` · ${f1(g.price, 2)} kr` : ""}`));
+    `${net == null ? "" : net < -50 ? "säljer" : "köper"}${g.price != null ? ` · ${f1(g.price, 2)} ${moneyUnit()}` : ""}`));
   const sunUp = (s.w != null && s.w > 50) || (s.forecast_w != null && s.forecast_w > 100);
   if (flowShown) { /* sol, nät, varmvatten och batteri syns redan i "Just nu" */ }
   else if (sunUp || h.water == null) tiles.push(qt('data-a="solarsheet"', "Sol", s.w != null ? `${f1(s.w / 1000)}<small> kW</small>` : "–", s.today_kwh != null ? `idag ${f1(s.today_kwh, 0)} kWh` : ""));
   else tiles.push(qt('data-a="tab" data-v="hus"', "Varmvatten", `${f1(h.water, 0)}<small>°C</small>`, h.running ? "pumpen går" : "pumpen vilar"));
   if (flowShown) { /* billigaste timmen syns i planen under */ }
   else if (b && b.soc != null) tiles.push(qt('data-a="insights"', "Batteri", `${b.soc}<small> %</small>`, b.w == null ? "" : b.w > 30 ? `laddar ${f1(b.w / 1000)} kW` : b.w < -30 ? `laddar ur ${f1(-b.w / 1000)} kW` : "vilar"));
-  else { const c = nextCheap(); tiles.push(qt('data-a="tab" data-v="plan"', "Billigast", c ? `${hh(c.t)}` : "–", c ? `${f1(c.avg, 2)} kr/kWh` : "")); }
+  else { const c = nextCheap(); tiles.push(qt('data-a="tab" data-v="plan"', "Billigast", c ? `${hh(c.t)}` : "–", c ? `${f1(c.avg, 2)} ${moneyUnit()}/kWh` : "")); }
   if (SV && SV.ok) {                                      // besparingen som ruta; tryck = nästa period (idag → 7 d → månad)
     const ks = SVP.map(([k]) => k), i = Math.max(0, ks.indexOf(svPeriod)), p = SV.periods[svPeriod] || SV.periods.week, nxt = ks[(i + 1) % ks.length];
     const lbl = (SVP.find(([k]) => k === svPeriod) || [, ""])[1];
-    tiles.push(qt(`data-a="svp" data-v="${nxt}"`, `Sparat · ${lbl}`, `<span style="color:${p.saved_kr >= 0 ? "var(--acc)" : "var(--bad)"}">${p.saved_kr > 0 ? "+" : p.saved_kr < 0 ? "−" : ""}${f1(Math.abs(p.saved_kr), 0)}</span><small> kr</small>`,
+    tiles.push(qt(`data-a="svp" data-v="${nxt}"`, `Sparat · ${lbl}`, `<span style="color:${p.saved_kr >= 0 ? "var(--acc)" : "var(--bad)"}">${p.saved_kr > 0 ? "+" : p.saved_kr < 0 ? "−" : ""}${f1(Math.abs(p.saved_kr), 0)}</span><small> ${moneyUnit()}</small>`,
       p.pct != null ? `${p.pct > 0 ? "+" : ""}${f1(p.pct, 0)} % billigare` : ""));
   }
   if (EN && EN.today_kwh != null) tiles.push(qt('data-a="tab" data-v="historik"', "Idag", `${f1(EN.today_kwh, 0)}<small> kWh</small>`, "förbrukat hittills"));
@@ -318,7 +319,7 @@ function solarSheet() {                                    // exportgränsen (f�
 }
 function insightsSheet() {
   sheet(`<h3>Just nu</h3><div class="insl">${(EN.insights || []).map((x) => `<div class="insr"><span>${x.i}</span><span>${esc(x.t)}</span></div>`).join("") || '<div class="note">Inget särskilt just nu.</div>'}</div>
-    <div class="note">Sparat idag ${f1(EN.saving_today, 1)} kr · förbrukat ${EN.today_kwh != null ? f1(EN.today_kwh, 0) : "–"} kWh</div>
+    <div class="note">Sparat idag ${f1(EN.saving_today, 1)} ${moneyUnit()} · förbrukat ${EN.today_kwh != null ? f1(EN.today_kwh, 0) : "–"} kWh</div>
     <div class="crow"><button class="mini" data-a="report">Veckorapport</button><button class="mini" data-a="aidecisions">Alla AI-beslut</button><button class="mini" data-a="closesheet">Stäng</button></div>`);
 }
 // ---- Plan ------------------------------------------------------------------------------------------------------------------------
@@ -360,9 +361,9 @@ function chart(title, unit, series, labels, colors, names, key) {
   const paths = series.map((s, k) => { if (!vis[k]) return ""; let d = ""; s.forEach((v, i) => { if (v != null) d += (d ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); }); return `<path d="${d}" fill="none" stroke="${colors[k]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`; }).join("");
   // Skala: tre hjälplinjer med värden (min, mitten, max) så att man ser vad kurvan betyder
   const grid = [0, 0.5, 1].map((q) => { const v = mn + q * rg, y = Y(v); return `<line x1="0" x2="${W}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-opacity=".12" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"/>`; }).join("");
-  const ylab = [1, 0.5, 0].map((q) => `<span style="position:absolute;right:2px;top:${(((Hh - 4 - q * (Hh - 10)) / Hh) * 100).toFixed(1)}%;transform:translateY(-50%);font-size:.66rem;opacity:.6">${f1(mn + q * rg, unit === "kr" ? 2 : 1)}</span>`).join("");
+  const ylab = [1, 0.5, 0].map((q) => `<span style="position:absolute;right:2px;top:${(((Hh - 4 - q * (Hh - 10)) / Hh) * 100).toFixed(1)}%;transform:translateY(-50%);font-size:.66rem;opacity:.6">${f1(mn + q * rg, unit === moneyUnit() ? 2 : 1)}</span>`).join("");
   const last = series.map((s, k) => vis[k] ? [...s].reverse().find((v) => v != null) : null);
-  return `<section class="card chart"><div class="ch"><b style="color:var(--txt)">${title}</b><span>${last.map((v, k) => v == null ? "" : `<span style="color:${colors[k]}">${f1(v, unit === "kr" ? 2 : 1)}</span>`).filter(Boolean).join(" · ")} ${unit}</span></div>${legend}<div style="position:relative;flex:1;min-height:0"><svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" style="color:var(--mut);position:absolute;inset:0;width:100%;height:100%">${grid}${paths}</svg>${ylab}</div><div class="ch"><span>${labels[0] ?? ""}:00</span><span>${labels[Math.floor((n - 1) / 2)] ?? ""}:00</span><span>${labels[n - 1] ?? ""}:00</span></div></section>`;
+  return `<section class="card chart"><div class="ch"><b style="color:var(--txt)">${title}</b><span>${last.map((v, k) => v == null ? "" : `<span style="color:${colors[k]}">${f1(v, unit === moneyUnit() ? 2 : 1)}</span>`).filter(Boolean).join(" · ")} ${unit}</span></div>${legend}<div style="position:relative;flex:1;min-height:0"><svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" style="color:var(--mut);position:absolute;inset:0;width:100%;height:100%">${grid}${paths}</svg>${ylab}</div><div class="ch"><span>${labels[0] ?? ""}:00</span><span>${labels[Math.floor((n - 1) / 2)] ?? ""}:00</span><span>${labels[n - 1] ?? ""}:00</span></div></section>`;
 }
 // ---- Historik (inspirerat av FTW:s History-vy, egen implementation) ------------------------------------------------------------
 let histView = LS.get("ew_hist_view", "energi");
@@ -382,7 +383,7 @@ function pageHistorik() {
   const seg = `<div class="seg">${[["energi", "Energi"], ["temp", "Temperatur"], ["pris", "Elpris"]].map(([k, l]) => `<button data-a="histview" data-v="${k}" class="${histView === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
   if (histView !== "energi") {
     if (!HIST) return `<div class="page">${seg}<div class="note" style="text-align:center">Laddar…</div></div>`;
-    const h = HIST, c = histView === "temp" ? chart("Temperatur inne / ute", "°C", [h.indoor, h.outdoor], h.t, ["var(--warn)", "var(--mut)"], ["Inne", "Ute"], "temp") : chart("Elpris", "kr", [h.price], h.t, ["var(--acc)"], ["Spotpris kr/kWh"], "pris");
+    const h = HIST, c = histView === "temp" ? chart("Temperatur inne / ute", "°C", [h.indoor, h.outdoor], h.t, ["var(--warn)", "var(--mut)"], ["Inne", "Ute"], "temp") : chart("Elpris", moneyUnit(), [h.price], h.t, ["var(--acc)"], [`Spotpris ${moneyUnit()}/kWh`], "pris");
     return `<div class="page">${seg}<div class="charts one">${c}</div></div>`;
   }
   if (!HX) return `<div class="page">${seg}<div class="note" style="text-align:center">Laddar…</div></div>`;
@@ -413,7 +414,7 @@ function render() {
   const pcs = $("#pcslot");
   if (pcs && PC && window.EWPlanView) {
     if (!PCEL) PCEL = document.createElement("div");
-    if (PCNEW && (!PCH || PCH.index === 0)) { PCH = EWPlanView.mount(PCEL, PC, { lang: I18N.lang === "en" ? "en" : "sv", unit: "kr" }); PCNEW = false; }
+    if (PCNEW && (!PCH || PCH.index === 0)) { PCH = EWPlanView.mount(PCEL, PC, { lang: I18N.lang === "en" ? "en" : "sv", unit: moneyUnit() }); PCNEW = false; }
     pcs.replaceWith(PCEL);
   }
   const _pg = document.querySelector(".page");
@@ -530,7 +531,7 @@ async function logSheet(first = true) {
 }
 async function reportSheet() {
   let d; try { d = await api("report"); } catch (e) { return toast(e.message); } const t = d.total;
-  sheet(`<h3>Veckorapport (7 dygn)</h3><div class="note">Förbrukning ${f1(t.use, 0)} kWh · sol ${f1(t.sun, 0)} kWh · elbil ${f1(t.ev, 0)} kWh · spotkostnad ca ${f1(t.cost, 0)} kr · snittpris ${f1(t.price, 2)} kr/kWh</div>
+  sheet(`<h3>Veckorapport (7 dygn)</h3><div class="note">Förbrukning ${f1(t.use, 0)} kWh · sol ${f1(t.sun, 0)} kWh · elbil ${f1(t.ev, 0)} kWh · spotkostnad ca ${f1(t.cost, 0)} ${moneyUnit()} · snittpris ${f1(t.price, 2)} ${moneyUnit()}/kWh</div>
   <div class="setrow note"><b style="flex:1">Dag</b><b style="width:56px;text-align:right">Förbr.</b><b style="width:48px;text-align:right">Sol</b><b style="width:48px;text-align:right">Bil</b><b style="width:48px;text-align:right">kr</b></div>
   ${d.days.map((x) => `<div class="setrow"><span style="flex:1">${esc(x.d)}</span><span style="width:56px;text-align:right">${f1(x.use, 0)}</span><span style="width:48px;text-align:right">${f1(x.sun, 0)}</span><span style="width:48px;text-align:right">${f1(x.ev, 0)}</span><span style="width:48px;text-align:right">${f1(x.cost, 0)}</span></div>`).join("")}<div class="note">kWh per dygn. Kostnaden är spotpris utan nätavgifter.</div>`);
 }

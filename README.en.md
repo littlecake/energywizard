@@ -89,6 +89,9 @@ Prefer doing it yourself? `docker-compose.enkel.yml` is enough - save it as `doc
 docker run -d --name energywizard --restart unless-stopped -p 8503:8503 -p 8502:8502 -v energywizard:/data ghcr.io/murre87/energywizard:latest
 ```
 
+**Australia / Amber:** select Australia (AUD) in price settings and choose your Home Assistant price sensor.
+See [Australian prices and dynamic forecast refreshes](docs/australian-prices.md) for GST, timezone, and current-price setup.
+
 ## Supported hardware
 
 Everything goes through the device's own Home Assistant integration or a local API, never our own protocol

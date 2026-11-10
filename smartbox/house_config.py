@@ -116,8 +116,12 @@ def car_specs(cfg: dict) -> dict:
             max_a = int(ch.get("max_a") or 16)
         except (TypeError, ValueError):
             max_a = 16
+        try:   # evs[].max_charge_kw: effekten bilen drar vid max_a (se ev_power.py); saknas den räknas 230 V x faser som förut
+            max_kw = float(ev.get("max_charge_kw") or ch.get("max_charge_kw") or 0) or None
+        except (TypeError, ValueError):
+            max_kw = None
         out[cid] = {"name": ev.get("name") or cid.capitalize(), "max_a": max_a, "phases": ph if ph in ("1", "3", "auto") else "auto",
-                    "battery_kwh": ev.get("battery_kwh")}
+                    "battery_kwh": ev.get("battery_kwh"), "max_charge_kw": max_kw if max_kw and max_kw > 0 else None}
     return out
 
 

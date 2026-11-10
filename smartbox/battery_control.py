@@ -20,7 +20,7 @@ Reglerna, i prioritetsordning (första som gäller vinner):
   4. Minuspris                                             -> ladda (även från nätet), upp till max
   5. Elbilen laddar från nätet                             -> håll (töm inte batteriet i bilen)
   6. Elbilen solladdar och batteriet är över prioritetsnivån -> vila (överskottet till bilen)
-  7. Batteriet vid/under reservnivån                       -> håll (sparas till strömavbrott)
+  7. Batteriet vid/under reservnivån utan planerad laddning -> håll (sparas till strömavbrott)
   8. Dygnsplanen (battery_plan.py) för pågående kvart     -> ladda / ladda ur / håll / auto
   9. (utan plan) Billig timme och dyrare timmar kvar       -> håll (spara till de dyra timmarna)
  10. Annars                                                -> auto (självförbrukning)
@@ -128,9 +128,10 @@ def decide(s, cfg, supported=frozenset({"auto"})):
         return out("hold", "ev_grid", "Elbilen laddar från nätet - batteriet töms inte i bilen.")
     if s.get("ev_solar_active") and soc >= prio:
         return out("idle", "ev_solar", f"Elbilen solladdar och batteriet har {soc:.0f} % (över {prio:.0f} %) - solöverskottet går till bilen.")
-    if soc <= reserve:
-        return out("hold", "reserve", f"Batteriet är på reservnivån ({soc:.0f} % ≤ {reserve:.0f} %) - sparas till strömavbrott.")
     planned = s.get("planned_action")
+    # The reserve protects against discharge, but must allow planned charging to recover (#229).
+    if soc <= reserve and planned != "charge":
+        return out("hold", "reserve", f"Batteriet är på reservnivån ({soc:.0f} % ≤ {reserve:.0f} %) - sparas till strömavbrott.")
     if planned:
         from battery_plan import REASON
         pmax_plan = pmax if planned in ("charge", "discharge") else None

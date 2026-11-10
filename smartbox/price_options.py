@@ -44,3 +44,18 @@ def extended_price_options(body):
     elif body.get("country") in (None, "CZ") and result.get("price_hdo_entity") and any(result.get("price_distribution_" + tariff) is None for tariff in ("nt", "vt")):
         raise ValueError("Ange båda distributionsavgifterna när HDO används")
     return result
+
+
+def validate_result(current, updates):
+    """Validate the complete effective configuration after a partial update."""
+    c = dict(current)
+    c.update({key.removeprefix("price_"): value for key, value in updates.items() if key.startswith("price_")})
+    for side in ("buy", "sell"):
+        if c.get(side + "_mode") == "fixed" and c.get(side + "_fixed") is None:
+            raise ValueError("Ange ett fast pris när fast avtal är valt")
+    if c.get("country") == "CZ" and c.get("buy_mode") == "hdo":
+        if not c.get("hdo_entity") or any(c.get("buy_" + tariff) is None for tariff in ("nt", "vt")):
+            raise ValueError("Ange båda slutpriserna för NT och VT")
+    elif c.get("country") == "CZ" and c.get("hdo_entity"):
+        if any(c.get("distribution_" + tariff) is None for tariff in ("nt", "vt")):
+            raise ValueError("Ange båda distributionsavgifterna när HDO används")

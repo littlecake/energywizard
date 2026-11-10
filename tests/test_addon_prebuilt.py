@@ -50,3 +50,10 @@ def test_aldre_korning_hojer_aldrig_bakat():
     assert subprocess.run([_s.executable, script, "newer", "1.2.27", "1.2.27"]).returncode == 1
     wf = (ROOT / ".github" / "workflows" / "docker.yml").read_text(encoding="utf-8")
     assert "ref: main" in wf and 'exit 1' in wf and "git show" in wf
+
+
+def test_fork_versions_are_parsed_and_ordered():
+    assert av.config_version('version: "1.2.65-cz.5"\n') == "1.2.65-cz.5"
+    assert av.changelog_version('## 1.2.65-cz.5 (2026-11-10)\n') == "1.2.65-cz.5"
+    assert av._key("1.2.65-cz.6") > av._key("1.2.65-cz.5")
+    assert av._key("1.2.66") > av._key("1.2.65-cz.5")

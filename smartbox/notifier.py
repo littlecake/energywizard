@@ -63,13 +63,35 @@ def _init():
         _ha_headers = ha._HEADERS
 
 
+def _localized_payload(title, message, data):
+    """Translate presentation without changing notification routing or opaque action data (#202)."""
+    original = {"title": title, "message": message}
+    if data:
+        original["data"] = data
+    try:
+        from copy import deepcopy
+        import i18n_py
+        lang = i18n_py.language()
+        def text(value):
+            return "\n".join(i18n_py.tr(line, lang) for line in value.split("\n"))
+        payload = {"title": text(title), "message": text(message)}
+        if data:
+            payload["data"] = deepcopy(data)
+            actions = payload["data"].get("actions")
+            for action in actions if isinstance(actions, list) else []:
+                if isinstance(action, dict) and isinstance(action.get("title"), str):
+                    action["title"] = text(action["title"])
+        return payload
+    except Exception:
+        # A missing/broken translation must never stop an operational notification.
+        return original
+
+
 def _send(target: str, title: str, message: str, data: dict = None, key: str | None = None):
     """Skickar en notis (eventuellt med action-knappar) till en specifik HA-mottagare: en notify-tjänst (t.ex.
     mobile_app_pixel_8) eller ett skript ("script.mitt_skript", #170) som får variablerna title, message (och data)."""
     _init()
-    payload = {"title": title, "message": message}
-    if data:
-        payload["data"] = data
+    payload = _localized_payload(title, message, data)
     domain, svc = ("script", target.split(".", 1)[1]) if target.startswith("script.") else ("notify", target)
     try:
         # #188: 5 s räckte inte alltid (HA:s push via molnet eller ett skript som tar tid). Inget nytt försök: en sen
@@ -206,6 +228,8 @@ def morning_price_tip(all_prices: list, cheap_hours_count: int, weekday: int):
     """
     if not all_prices:
         return
+    import nordpool
+    symbol = nordpool.cost_settings()["symbol"]
 
     # Hitta de billigaste timmarna (4 kvartar per timme)
     # Gruppera kvartar till timmar och räkna snittpris per timme
@@ -234,13 +258,13 @@ def morning_price_tip(all_prices: list, cheap_hours_count: int, weekday: int):
         else:
             avg = price_sum / count
             end_h = prev_h + 1
-            blocks.append(f"  {start_h:02d}:00–{end_h:02d}:00 ({avg:.2f} kr/kWh)")
+            blocks.append(f"  {start_h:02d}:00–{end_h:02d}:00 ({avg:.2f} {symbol}/kWh)")
             start_h, price_sum, count = h, p, 1
         prev_h = h
 
     avg = price_sum / count
     end_h = prev_h + 1
-    blocks.append(f"  {start_h:02d}:00–{end_h:02d}:00 ({avg:.2f} kr/kWh)")
+    blocks.append(f"  {start_h:02d}:00–{end_h:02d}:00 ({avg:.2f} {symbol}/kWh)")
 
     day_name = ["måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"][weekday]
     message  = "Bra tider att köra disk eller tvätt:\n" + "\n".join(blocks)
