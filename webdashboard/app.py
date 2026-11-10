@@ -334,7 +334,9 @@ async def shadow_set(request: Request):
 
 
 _PRICE_KEYS = ("price_country", "price_area", "price_vat_pct", "price_buy_extra", "price_sell_extra", "price_sell_vat",
-               "price_currency", "price_ha_entity", "price_tou_extra", "price_tou_hours", "price_tou_months", "price_tou_weekdays")
+               "price_currency", "price_ha_entity", "price_tou_extra", "price_tou_hours", "price_tou_months", "price_tou_weekdays",
+               "price_buy_mode", "price_buy_fixed", "price_sell_mode", "price_sell_fixed",
+               "price_hdo_entity", "price_distribution_nt", "price_distribution_vt")
 
 
 @app.get("/api/price-settings")
@@ -353,8 +355,22 @@ async def price_settings_get():
             "countries": {k: {"name": v["name"], "vat_pct": v["vat_pct"], "currency": v["currency"], "areas": v["areas"]}
                           for k, v in nordpool.COUNTRIES.items()},
             # Räkneexempel för spotpris 1,00 exkl. moms: samma formel som nordpool.full_buy_cost/full_sell_income
-            "example": {"spot": 1.0, "buy": round(1.0 * (1 + c["vat_pct"] / 100) + c["buy_extra"], 4),
-                        "sell": round((1 + c["vat_pct"] / 100 if c["sell_vat"] else 1.0) + c["sell_extra"], 4)}}
+            "example": {"spot": 1.0, "buy": round(nordpool.full_buy_cost(1.0 * (1 + c["vat_pct"] / 100) if nordpool.prices_include_vat() else 1.0), 4),
+                        "sell": round(nordpool.full_sell_income(1.0 * (1 + c["vat_pct"] / 100) if nordpool.prices_include_vat() else 1.0), 4)}}
+
+
+@app.get("/api/distribution-schedules")
+async def distribution_schedules():
+    try:
+        r = requests.get(f"{homeassistant._BASE}/states", headers=homeassistant._HEADERS, timeout=10, verify=homeassistant._VERIFY)
+        r.raise_for_status()
+        entities = [{"entity_id": st["entity_id"], "name": (st.get("attributes") or {}).get("friendly_name") or st["entity_id"]}
+                    for st in r.json() if st.get("entity_id", "").startswith("sensor.")
+                    and isinstance((st.get("attributes") or {}).get("schedule"), list)
+                    and any(isinstance(row, dict) and row.get("tariff") in ("NT", "VT") for row in st["attributes"]["schedule"])]
+        return {"ok": True, "entities": entities}
+    except Exception:
+        return {"ok": False, "entities": [], "error": "Could not read distribution schedules from Home Assistant"}
 
 
 @app.get("/api/price-entities")
@@ -383,8 +399,7 @@ async def price_entities():
     if not selected and nordpool.price_source() == "ha_nordpool":       # vald via miljön (PRICE_SOURCE/NORDPOOL_HA_ENTITY)
         selected = os.environ.get("NORDPOOL_HA_ENTITY", "sensor.nordpool")
     return {"ok": True, "entities": out, "selected": selected,
-            "includes_vat": nordpool.prices_include_vat() if ew_settings.get("price_ha_entity") else
-            str(ew_settings.get("price_includes_vat", True)).lower() not in ("0", "false")}
+            "includes_vat": nordpool.prices_include_vat()}
 
 
 # ---- Aviseringar till vilken telefon (issue #123: förut den första mobile_app_* i HA - kunde vara fel persons) ----
@@ -647,7 +662,8 @@ async def price_source_set(request: Request):
     ent = str(body.get("ha_entity") or "").strip()
     if ent and not re.fullmatch(r"(sensor|event)\.[a-z0-9_]+", ent):
         return JSONResponse({"error": "Ogiltig entitet"}, status_code=400)
-    ew_settings.update(price_ha_entity=ent or None, price_includes_vat=bool(body.get("includes_vat", True)))
+    import nordpool
+    ew_settings.update(price_ha_entity=ent or None, price_includes_vat=bool(body.get("includes_vat", nordpool.cost_settings()["country"] != "CZ")))
     return {"ok": True}
 
 
@@ -658,7 +674,11 @@ async def price_settings_set(request: Request):
         return JSONResponse({"error": "Bara ägaren kan ändra elpris och avgifter"}, status_code=403)
     import nordpool
     body = await request.json()
-    upd = {}
+    from price_options import extended_price_options
+    try:
+        upd = extended_price_options(body)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
     country = str(body.get("country") or "SE").upper()
     if country not in nordpool.COUNTRIES:
         return JSONResponse({"error": "Okänt land"}, status_code=400)
@@ -1995,3 +2015,4 @@ def _index_html() -> str:
 @app.get("/{full_path:path}")
 async def spa(full_path: str):
     return HTMLResponse(_index_html(), headers={"Cache-Control": "no-cache"})
+

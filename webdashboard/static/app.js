@@ -1298,7 +1298,8 @@ async function mountSensorSettings() {
 }
 
 async function mountPriceSettings() {
-  let d;
+  let d, schedules = [];
+  try { const h = await api("api/distribution-schedules"); schedules = h.entities || []; } catch (e) {}
   try { d = await api("api/price-settings"); } catch (e) { return; }
   const card = document.getElementById("pricecard"), body = document.getElementById("pricebody");
   if (!card || !d.ok) return;
@@ -1319,6 +1320,21 @@ async function mountPriceSettings() {
         ${field("pbuy", `Avgifter vid köp (${sym}/kWh, inkl. moms)`, d.buy_extra, "Nätöverföring + energiskatt + elhandlarens påslag")}
         ${field("psell", `Ersättning vid försäljning (${sym}/kWh)`, d.sell_extra, "Utöver spotpriset, t.ex. nätnytta")}
       </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+        <label><span class="note">Köpavtal</span><select id="pbuymode"><option value="spot"${d.buy_mode !== "fixed" ? " selected" : ""}>Spotpris</option><option value="fixed"${d.buy_mode === "fixed" ? " selected" : ""}>Fast pris</option></select></label>
+        ${field("pbuyfixed", `Fast inköpspris (${sym}/kWh, inkl. moms)`, d.buy_fixed || 0, "Endast elhandel; avgifter och distribution läggs till separat")}
+        <label><span class="note">Säljavtal</span><select id="psellmode"><option value="spot"${d.sell_mode !== "fixed" ? " selected" : ""}>Spotpris</option><option value="fixed"${d.sell_mode === "fixed" ? " selected" : ""}>Fast pris</option></select></label>
+        ${field("psellfixed", `Fast försäljningspris (${sym}/kWh)`, d.sell_fixed || 0, "Slutpris enligt avtal; justeringen ovan läggs till")}
+      </div>
+      <details style="margin-top:12px"${d.hdo_entity ? " open" : ""}><summary><b>Distribution via HDO</b></summary>
+        <label style="display:flex;flex-direction:column;margin-top:8px"><span class="note">HDO-schema från Home Assistant</span>
+          <select id="phdo"><option value="">Av</option>${schedules.map(e => `<option value="${esc(e.entity_id)}"${e.entity_id === d.hdo_entity ? " selected" : ""}>${esc(e.name)} · ${esc(e.entity_id)}</option>`).join("")}${d.hdo_entity && !schedules.some(e => e.entity_id === d.hdo_entity) ? `<option value="${esc(d.hdo_entity)}" selected>${esc(d.hdo_entity)} (otillgänglig)</option>` : ""}</select></label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+          ${field("pnt", `Distribution NT (${sym}/kWh, inkl. moms)`, d.distribution_nt || 0, "Endast rörlig distribution, inte elhandel")}
+          ${field("pvt", `Distribution VT (${sym}/kWh, inkl. moms)`, d.distribution_vt || 0, "Ta bort samma avgift från köpavgiften ovan")}
+        </div>
+        <div class="note">Använder framtida NT/VT-intervall från ČEZ HDO. Saknas schema används den högre distributionsavgiften. Fasta månadsavgifter ingår inte. HDO påverkar bara köp.</div>
+      </details>
       <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="psellvat"${d.sell_vat ? " checked" : ""}> Moms på såld el (oftast nej för privatpersoner)</label>
       <details style="margin-top:12px"${d.tou_extra ? " open" : ""}><summary><b>Tidstariff</b> <span class="note">(dyrare nätavgift under höglasttid)</span></summary>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
@@ -1351,15 +1367,18 @@ async function mountPriceSettings() {
       <button class="icobtn" id="psave" style="margin-top:10px">Spara</button>`;
     document.getElementById("pcountry").onchange = (e) => {
       const k = e.target.value, cc = d.countries[k];
-      Object.assign(d, { country: k, area: cc.areas[0], vat_pct: cc.vat_pct, currency: cc.currency, symbol: cc.currency === "EUR" ? "€" : cc.currency === "GBP" ? "£" : cc.currency === "PLN" ? "zł" : "kr",
+      Object.assign(d, { country: k, area: cc.areas[0], vat_pct: cc.vat_pct, currency: cc.currency, symbol: cc.currency === "EUR" ? "€" : cc.currency === "GBP" ? "£" : cc.currency === "PLN" ? "zł" : cc.currency === "CZK" ? "Kč" : "kr",
         buy_extra: k === "SE" ? 0.62675 : 0, sell_extra: k === "SE" ? 0.02125 : 0 });
       draw();
+      mountPriceSource("pricesrc", d.country);
     };
     document.getElementById("phchoice").onchange = (e) => { document.getElementById("phown").style.display = e.target.value === "egen" ? "block" : "none"; };
     document.getElementById("psave").onclick = async () => {
       const v = (id) => (document.getElementById(id) || {}).value;
       try {
         await postJSON("api/price-settings", { country: v("pcountry"), area: v("parea"), vat_pct: v("pvat"), buy_extra: v("pbuy"),
+          buy_mode: v("pbuymode"), buy_fixed: v("pbuyfixed"), sell_mode: v("psellmode"), sell_fixed: v("psellfixed"),
+          hdo_entity: v("phdo"), distribution_nt: v("pnt"), distribution_vt: v("pvt"),
           sell_extra: v("psell"), sell_vat: document.getElementById("psellvat").checked,
           tou_extra: v("ptou"), tou_hours: v("ptouh"), tou_months: v("ptoum"), tou_weekdays: document.getElementById("ptouwd").checked,
           power_high: { choice: v("phchoice"), hours: v("phh"), months: v("phm"), weekdays: document.getElementById("phwd").checked } });
@@ -2182,3 +2201,4 @@ document.getElementById("menubtn").onclick = () => {
 document.getElementById("sidebarbackdrop").onclick = closeMobileMenu;
 
 boot();
+
