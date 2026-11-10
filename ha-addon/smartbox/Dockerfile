@@ -42,7 +42,7 @@ RUN cp -r /src/smartbox /smartbox \
     && cp -r /src/webdashboard /webdashboard \
     && cp /src/LICENSE /LICENSE && cp /src/LICENSE /smartbox/LICENSE \
     && mkdir -p /tmp/ew-tests \
-    && cp /src/tests/test_cz_tariffs.py /src/tests/test_i18n_named.py /tmp/ew-tests/ \
+    && cp /src/tests/test_cz_tariffs.py /src/tests/test_i18n_named.py /src/tests/test_ha_solar_forecast.py /tmp/ew-tests/ \
     && rm -rf /src
 
 # Motorns beroenden + det gränssnitten installerar i sina egna Dockerfiles

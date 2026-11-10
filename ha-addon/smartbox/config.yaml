@@ -1,5 +1,5 @@
 name: "EnergyWizard CZ (Koláček fork)"
-version: "1.2.65-cz.4"
+version: "1.2.65-cz.5"
 slug: "smartbox"
 description: "Czech translation, OTE and HDO tariffs. Shadow mode is forced."
 url: "https://github.com/littlecake/energywizard"

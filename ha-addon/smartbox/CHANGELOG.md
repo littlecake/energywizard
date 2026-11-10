@@ -11,6 +11,17 @@ history is preserved below.
 - Verify all 82 messages added by this fork in Czech, English and Swedish
   (246 translation checks).
 
+## 1.2.65-cz.5 (2026-11-10)
+
+- Add optional Solcast forecasts through the existing Home Assistant integration.
+- Add source selection and installation guidance in Czech, English and Swedish.
+- Preserve native forecast intervals and use time-weighted hourly energy totals.
+- Fall back to the internal model for unavailable, stale or uncovered intervals.
+- Keep the internal clear-sky reference and measured PV sensors separate.
+- Run the 15 Solcast adapter tests alongside tariff and translation tests during
+  the add-on build. Keep forced shadow mode enabled.
+- Upstream proposal: https://github.com/murre87/energywizard/pull/248.
+
 ## 1.2.65-cz.4 (2026-11-10)
 
 - Add a Czech purchase mode using final NT/VT prices and a future HDO schedule.
