@@ -1322,16 +1322,16 @@ async function mountPriceSettings() {
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
         <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px;min-width:0"><span class="note">Köpavtal</span><select id="pbuymode"><option value="spot"${d.buy_mode !== "fixed" ? " selected" : ""}>Spotpris</option><option value="fixed"${d.buy_mode === "fixed" ? " selected" : ""}>Fast pris</option></select></label>
-        ${field("pbuyfixed", `Fast inköpspris (${sym}/kWh, inkl. moms)`, d.buy_fixed || 0, "Endast elhandel; avgifter och distribution läggs till separat")}
+        ${field("pbuyfixed", `Fast inköpspris (${sym}/kWh, inkl. moms)`, d.buy_fixed ?? "", "Endast elhandel; avgifter och distribution läggs till separat")}
         <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px;min-width:0"><span class="note">Säljavtal</span><select id="psellmode"><option value="spot"${d.sell_mode !== "fixed" ? " selected" : ""}>Spotpris</option><option value="fixed"${d.sell_mode === "fixed" ? " selected" : ""}>Fast pris</option></select></label>
-        ${field("psellfixed", `Fast försäljningspris (${sym}/kWh)`, d.sell_fixed || 0, "Slutpris enligt avtal; justeringen ovan läggs till")}
+        ${field("psellfixed", `Fast försäljningspris (${sym}/kWh)`, d.sell_fixed ?? "", "Slutpris enligt avtal; justeringen ovan läggs till")}
       </div>
       <details style="margin-top:12px"${d.hdo_entity ? " open" : ""}><summary><b>Distribution via HDO</b></summary>
         <label style="display:flex;flex-direction:column;margin-top:8px"><span class="note">HDO-schema från Home Assistant</span>
           <select id="phdo"><option value="">Av</option>${schedules.map(e => `<option value="${esc(e.entity_id)}"${e.entity_id === d.hdo_entity ? " selected" : ""}>${esc(e.name)} · ${esc(e.entity_id)}</option>`).join("")}${d.hdo_entity && !schedules.some(e => e.entity_id === d.hdo_entity) ? `<option value="${esc(d.hdo_entity)}" selected>${esc(d.hdo_entity)} (otillgänglig)</option>` : ""}</select></label>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
-          ${field("pnt", `Distribution NT (${sym}/kWh, inkl. moms)`, d.distribution_nt || 0, "Endast rörlig distribution, inte elhandel")}
-          ${field("pvt", `Distribution VT (${sym}/kWh, inkl. moms)`, d.distribution_vt || 0, "Ta bort samma avgift från köpavgiften ovan")}
+          ${field("pnt", `Distribution NT (${sym}/kWh, inkl. moms)`, d.distribution_nt ?? "", "Endast rörlig distribution, inte elhandel")}
+          ${field("pvt", `Distribution VT (${sym}/kWh, inkl. moms)`, d.distribution_vt ?? "", "Ta bort samma avgift från köpavgiften ovan")}
         </div>
         <div class="note">Använder framtida NT/VT-intervall från ČEZ HDO. Saknas schema används den högre distributionsavgiften. Fasta månadsavgifter ingår inte. HDO påverkar bara köp.</div>
       </details>

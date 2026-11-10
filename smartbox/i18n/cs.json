@@ -1938,5 +1938,9 @@
   "Storbritannien": "Velká Británie",
   "Standard för Storbritannien: # %": "Výchozí sazba pro Velká Británie: # %",
   "Česko": "Česko",
-  "Standard för Česko: # %": "Výchozí sazba pro Česko: # %"
+  "Standard för Česko: # %": "Výchozí sazba pro Česko: # %",
+  "Ogiltigt värde: {field}": "Neplatná hodnota: {field}",
+  "Ogiltig entitet för HDO-schema": "Neplatná entita HDO rozvrhu",
+  "Ange ett fast pris när fast avtal är valt": "Pro fixní tarif zadejte cenu",
+  "Ange båda distributionsavgifterna när HDO används": "Pro HDO zadejte obě distribuční sazby"
 }

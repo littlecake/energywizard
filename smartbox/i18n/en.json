@@ -1938,5 +1938,9 @@
   "Storbritannien": "United Kingdom",
   "Standard för Storbritannien: # %": "Default for United Kingdom: # %",
   "Česko": "Czechia",
-  "Standard för Česko: # %": "Default for Czechia: # %"
+  "Standard för Česko: # %": "Default for Czechia: # %",
+  "Ogiltigt värde: {field}": "Invalid value: {field}",
+  "Ogiltig entitet för HDO-schema": "Invalid HDO schedule entity",
+  "Ange ett fast pris när fast avtal är valt": "Enter a price when a fixed contract is selected",
+  "Ange båda distributionsavgifterna när HDO används": "Enter both distribution rates when HDO is enabled"
 }
