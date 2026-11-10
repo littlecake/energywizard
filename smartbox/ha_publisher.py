@@ -53,6 +53,8 @@ def _cheapest_dearest(prices):
 
 
 def _collect():
+    import nordpool
+    currency_symbol = nordpool.cost_settings()["symbol"]
     ent = {"sensor.smartbox_puls": (datetime.now(SWE).isoformat(timespec="seconds"),
                                     {"friendly_name": "Smartbox Puls", "device_class": "timestamp", "icon": "mdi:heart-pulse"})}
     with engine.connect() as c:
@@ -61,7 +63,7 @@ def _collect():
         now_ms = time.time() * 1000
         cur = next((p for ts, p in reversed(today) if ts <= now_ms), None)
         cheap, dear, day_avg = _cheapest_dearest(today)
-        attrs = {"friendly_name": "Smartbox Prisprognos", "unit_of_measurement": "kr/kWh", "icon": "mdi:chart-bar",
+        attrs = {"friendly_name": "Smartbox Prisprognos", "unit_of_measurement": f"{currency_symbol}/kWh", "icon": "mdi:chart-bar",
                  "idag": today, "imorgon": tomorrow,
                  "billigaste_timme": cheap[0] if cheap else None, "billigaste_pris": _num(cheap[1], 3) if cheap else None,
                  "dyraste_timme": dear[0] if dear else None, "dyraste_pris": _num(dear[1], 3) if dear else None,
@@ -126,7 +128,7 @@ def _collect():
         if e and e[0] is not None and day_avg is not None and e[1] is not None:
             kwh, wprice = float(e[0]), float(e[1])
             ent["sensor.smartbox_forbrukning_idag"] = (_num(kwh, 1), {"friendly_name": "Smartbox Köpt el idag", "unit_of_measurement": "kWh", "device_class": "energy", "icon": "mdi:counter"})
-            ent["sensor.smartbox_snittpris_idag"] = (_num(wprice, 3), {"friendly_name": "Smartbox Snittpris idag (viktat)", "unit_of_measurement": "kr/kWh", "icon": "mdi:cash", "dygnssnitt": _num(day_avg, 3)})
+            ent["sensor.smartbox_snittpris_idag"] = (_num(wprice, 3), {"friendly_name": "Smartbox Snittpris idag (viktat)", "unit_of_measurement": f"{currency_symbol}/kWh", "icon": "mdi:cash", "dygnssnitt": _num(day_avg, 3)})
             # Samma besparing som kortet i appen och på webben: mot en vanlig hushållsprofil, med moms (savings.py)
             try:
                 import savings
@@ -137,7 +139,7 @@ def _collect():
             except Exception:
                 _saved = None
             if _saved is not None:
-                ent["sensor.smartbox_besparing_idag"] = (_num(_saved, 2), {"friendly_name": "Smartbox Besparing idag", "unit_of_measurement": "kr", "icon": "mdi:piggy-bank",
+                ent["sensor.smartbox_besparing_idag"] = (_num(_saved, 2), {"friendly_name": "Smartbox Besparing idag", "unit_of_measurement": currency_symbol, "icon": "mdi:piggy-bank",
                                                                          "jamfort_med": "vanlig hushållsprofil, inkl. moms"})
     # Planerad last framåt (elbilens laddplan) - läsbar för Predbat via load_forecast:
     #   load_forecast: [sensor.smartbox_planerad_last$predbat]   (se planned_load.py)

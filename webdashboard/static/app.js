@@ -301,7 +301,7 @@ async function mountPlan(slotId) {
     const d = await api("api/plan");
     slot.innerHTML = d.ok ? planCardHtml(d) : "";
     const pcs = slot.querySelector(".ewpcslot");
-    if (pcs) api("api/planclock").then((pc) => { if (pc && pc.ok) EWPlanView.mount(pcs, pc, { lang: (window.I18N && I18N.lang === "en") ? "en" : "sv", unit: moneyUnit() }); }).catch(() => {});
+    if (pcs) api("api/planclock").then((pc) => { if (pc && pc.ok) EWPlanView.mount(pcs, pc, { lang: (window.I18N && I18N.lang) || "sv", unit: moneyUnit() }); }).catch(() => {});
     slot.querySelectorAll("[data-clockprice]").forEach((b) => b.onclick = () => {
       clockPriceMode = b.dataset.clockprice; localStorage.setItem("ew_clock_price", clockPriceMode); mountPlan(slotId);
     });
@@ -609,7 +609,7 @@ async function renderElbil() {
     postAction("api/schedule", { car, days: [0, 1, 2, 3, 4, 5, 6], ...rowOf(car, 0) }, "Måndagens schema gäller nu alla dagar").then(renderElbil);
   });
   if (d) api("api/ev-cost").then((ec) => {                // laddat idag/veckan/månaden och vad det kostade
-    const g = document.querySelector("#main .grid"), html = ec && ec.ok && window.EWJournal ? EWJournal.evCostHtml(ec) : "";
+    const g = document.querySelector("#main .grid"), html = ec && ec.ok && window.EWJournal ? EWJournal.evCostHtml(ec, { unit: moneyUnit() }) : "";
     if (g && html && currentPage === "elbil" && !document.getElementById("evcost")) g.insertAdjacentHTML("afterend", `<div class="card" id="evcost" style="margin-bottom:16px">${html}</div>`);
   }).catch(() => {});
 }

@@ -23,6 +23,14 @@
           heat: { CHEAP: "Pre-heating", EXPENSIVE: "Heat lowered" }, drag: "Drag the hand to explore the plan",
           legend: ["Discharging", "Charging", "Car", "Sun forecast"], legExport: "Discharging · selling", cheap: "Cheap", dear: "Expensive" },
   };
+  // Additional languages use the same catalog as the rest of the interface.
+  function labels(lang) {
+    if (T[lang]) return T[lang];
+    const tr = (s) => window.I18N ? window.I18N.tr(s) : s;
+    const src = { ...T.sv, until: "fram till", charge: "Laddning pågår", legend: ["Laddar ur", "Laddning pågår", "Bil", "Solprognos"] };
+    return Object.fromEntries(Object.entries(src).map(([k, v]) => [k, Array.isArray(v) ? v.map(tr) :
+      v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([key, text]) => [key, tr(text)])) : tr(v)]));
+  }
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   let styled = false;
   function style() {
@@ -55,7 +63,7 @@
   function mount(el, data, opts) {
     style();
     opts = opts || {};
-    const L = T[opts.lang] || T.sv, unit = opts.unit || "kr";
+    const L = labels(opts.lang), unit = opts.unit || "kr";
     const slots = (data && data.slots) || [];
     if (!slots.length) { el.innerHTML = ""; return null; }
     const cars = (data.cars || []).map((c, k) => ({ id: c.id, name: c.name || c.id, col: COL.car[k % COL.car.length] }));
