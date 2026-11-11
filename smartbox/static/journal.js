@@ -61,7 +61,7 @@
     const n1 = (x) => (Math.round(x * 10) / 10).toFixed(x >= 100 ? 0 : 1).replace(".", ",");
     const cell = (k, l) => { const p = P[k]; return `<div style="flex:1;min-width:0">
       <div class="note" style="margin:0">${l}${p.partial ? ` <span title="Loggen har luckor, siffran är för låg">· delvis</span>` : ""}</div>
-      <div style="font-weight:800;font-size:${c ? 1.05 : 1.25}rem">${p.kr} kr</div>
+      <div style="font-weight:800;font-size:${c ? 1.05 : 1.25}rem">${p.kr} ${esc(opts.unit || "kr")}</div>
       <div class="note" style="margin:0">${n1(p.kwh)} kWh${p.solar_kwh >= 0.5 ? `, ${n1(p.solar_kwh)} från solen` : ""}</div></div>`; };
     const title = c ? `<b>Laddat</b>` : `<h2>🔌 Laddat och vad det kostade</h2>`;
     return `${title}<div style="display:flex;gap:10px;margin-top:6px">${cell("today", "Idag")}${cell("week", "Veckan")}${cell("month", "Månaden")}</div>

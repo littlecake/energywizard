@@ -275,12 +275,16 @@ def morning_price_tip(all_prices: list, cheap_hours_count: int, weekday: int):
 
 def alert_high_price(price: float, limit: float):
     """Notis vid extremt högt elpris."""
-    send_emil("🚨 Extremt högt elpris!", f"Priset är nu {price:.3f} kr/kWh (>{limit:.2f} kr). Undvik tunga maskiner!")
+    import nordpool
+    symbol = nordpool.cost_settings()["symbol"]
+    send_emil("🚨 Extremt högt elpris!", f"Priset är nu {price:.3f} {symbol}/kWh (>{limit:.2f} {symbol}). Undvik tunga maskiner!")
 
 
 def alert_low_price(price: float):
     """Notis vid extremt lågt elpris (eller negativt)."""
-    send_emil("🎉 Extremt lågt elpris!", f"Priset är nu {price:.3f} kr/kWh – perfekt att köra energikrävande saker!")
+    import nordpool
+    symbol = nordpool.cost_settings()["symbol"]
+    send_emil("🎉 Extremt lågt elpris!", f"Priset är nu {price:.3f} {symbol}/kWh – perfekt att köra energikrävande saker!")
 
 
 def alert_pump_alarm(alarm_code: int):

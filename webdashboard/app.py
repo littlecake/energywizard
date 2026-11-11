@@ -1248,7 +1248,8 @@ async def api_plan():
             sun = None
     brief = plan_brief.build_brief(now, [(r[0], float(r[1])) for r in prices if r[1] is not None],
                                    [tuple(r) for r in ev_rows], nordpool.calculate_day_strategy,
-                                   int(cheap_hours), mode_row[0] if mode_row else None, battery_rows=[tuple(r) for r in bat_rows])
+                                   int(cheap_hours), mode_row[0] if mode_row else None, battery_rows=[tuple(r) for r in bat_rows],
+                                   currency=nordpool.cost_settings()["currency"], symbol=nordpool.cost_settings()["symbol"])
     from datetime import timedelta
     clock_prices = [{"t": r[0].isoformat(), "spot": round(float(r[1]), 4), "total": round(nordpool.full_buy_cost(float(r[1]), r[0]), 4)}
                     for r in prices if r[1] is not None and now - timedelta(minutes=15) <= r[0] < now + timedelta(hours=24)]

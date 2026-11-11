@@ -35,6 +35,7 @@ SOLAR = re.compile(r"solar|sol(el|ar)?\b|pv\b|photovolt|inverter|växelriktare|p
 INVERTER_MAKERS = re.compile(r"solaredge|huawei|fronius|sma\b|growatt|enphase|goodwe|solis|sungrow|deye|victron|ferroamp|solax|kostal|apsystems", re.I)
 HEATPUMP = re.compile(r"husdata|h60|h66|nibe|thermia|ivt|ctc|bosch|daikin|mitsubishi|panasonic|vaillant|viessmann|heat ?pump|värmepump|bergvärme|luft.?vatten|ecoforest|qvantum|nordic", re.I)
 SPA = re.compile(r"balboa|gecko|spa\b|spabad|jacuzzi|hot ?tub|bubbelpool|lay-?z|intex|softub|arctic spa|bwa", re.I)
+CFOS_POWERBRAIN = re.compile(r"c[ _-]?fos|power[ _-]?brain", re.I)
 CHARGER_MAKERS = re.compile(r"easee|zaptec|wallbox|charge ?amps|garo|ctek|go-?e|webasto|ensto|defa", re.I)
 # lbbrhzn/ocpp (den vanliga HA-integrationen som kör en OCPP-server inuti Home
 # Assistant) namnger entiteterna efter laddarens egen "charge point ID", inte efter
@@ -80,6 +81,7 @@ _TEMPLATE = """{% set ns = namespace(out=[]) %}
       "dc": s.attributes.device_class | default(none),
       "u": s.attributes.unit_of_measurement | default(none),
       "st": s.state,
+      "options": s.attributes.options | default(none) if s.entity_id.startswith('select.') else none,
       "ci": s.attributes.id | default(none) if s.entity_id.startswith('sensor.') and (s.attributes.id | default(none)) is string else none
   }] %}
 {% endfor %}
@@ -420,10 +422,19 @@ def _battery_control_preset(ents, all_ents=None):
     gw = _find(ents, "select", re.compile(r"inverter operation mode$", re.I))
     if gw:
         g = gw["e"]
-        return {"name": "goodwe", "entities": {"mode_select": g},
-                "modes": {"auto": "general", "charge": "eco_charge", "discharge": "eco_discharge"},
-                "note": "GoodWe: eco_charge/eco_discharge använder växelriktarens egna effekt- och SOC-gränser (Eco mode "
-                        "power/SOC). Provad mot källkoden, inte på riktig hårdvara än."}
+        options = gw.get("options")
+        if not isinstance(options, list) or not all(isinstance(x, str) for x in options):
+            options = []
+        # #181: exposed alternatives vary by integration/firmware. Never invent
+        # eco modes, and do not suggest forcing a mode without a known return path.
+        known = {"auto": "general", "charge": "eco_charge", "discharge": "eco_discharge"}
+        modes = {intent: option for intent, option in known.items() if option in options} if "general" in options else {}
+        note = ("GoodWe: endast lägen som Home Assistant erbjuder föreslås. "
+                "Eco-lägenas funktion och effekt-/SOC-gränser måste verifieras för din integration och firmware.")
+        if not modes:
+            note = ("GoodWe: lägeslistan eller normalläget general saknas. "
+                    "Läsning utan styrning föreslås tills lägena har verifierats i Home Assistant.")
+        return {"name": "goodwe", "entities": {"mode_select": g}, "modes": modes, "note": note}
     # SolarEdge med batteri via WillCodeForCats/solaredge-modbus-multi (const.py STORAGE_CONTROL_MODE / STORAGE_MODE):
     # "Storage Control Mode" = Remote Control + "Storage Command Mode". Urladdning = "Discharge to Minimize Import"
     # (säljer aldrig från batteriet). Laddning från nätet kräver att AC Charge Policy tillåter det i växelriktaren.
@@ -537,6 +548,29 @@ def _sungrow_mkaiser(all_ents):
                                              "charge": {e: "Forced mode", f: "Forced charge"},
                                              "discharge": {e: "Forced mode", f: "Forced discharge"}}},
             "note": "Sungrow (mkaiser): provad mot yaml-filen, inte på riktig hårdvara - börja i skuggläge."}
+
+
+def _cfos_charger_entities(ents):
+    """mb-software/homeassistant-powerbrain: session override in A, not rule switches (#226)."""
+    def pick(domain, suffix, units=None):
+        rx = re.compile(r"(?:^|_)" + re.escape(suffix) + r"$", re.I)
+        return next((e for e in ents if e["e"].startswith(domain + ".")
+                     and (units is None or e.get("u") in units)
+                     and any(rx.search(re.sub(r"[ -]+", "_", value))
+                             for value in (e["e"].split(".", 1)[1], e.get("n") or ""))), None)
+    status = pick("sensor", "state")
+    enabled = pick("switch", "charging_enabled")
+    limit = pick("number", "current_limit_override", {"A"})
+    if not (status and enabled and limit):
+        return None
+    out = {"status": status["e"], "switch": enabled["e"], "current_limit": limit["e"]}
+    power = pick("sensor", "charging_power", {"W", "kW"})
+    current = pick("sensor", "current_l1", {"A"})
+    if power:
+        out["power"] = power["e"]
+    if current:
+        out["current_import"] = current["e"]
+    return out
 
 
 def discover_house(entities: list[dict] | None = None) -> dict:
@@ -693,11 +727,12 @@ def discover_house(entities: list[dict] | None = None) -> dict:
         # "enhet" per pryl i nätverket döpt efter nätverkskortets tillverkare ("Nibe") - den är ingen värmepump.
         if not any(_is_temperature(x) or x["e"].startswith(("climate.", "water_heater.")) for x in ents):
             continue
-        # #198: NetHome Plus/Innova via Midea AC LAN reports manufacturer "Midea".
-        # Require a climate entity: the same maker also produces fans and appliances.
-        midea_climate = (_has(head.get("m"), re.compile(r"^(midea|innova)\b", re.I))
+        # #198/#221: these HA climate controllers have manufacturer metadata rather
+        # than a heat-pump brand in the device name. Require climate: these makers
+        # also expose fans, air-quality sensors and other non-heating devices.
+        known_climate = (_has(head.get("m"), re.compile(r"^(midea|innova|sensibo)\b", re.I))
                          and any(x["e"].startswith("climate.") for x in ents))
-        if _has(_candidate(head), HEATPUMP) or midea_climate:
+        if _has(_candidate(head), HEATPUMP) or known_climate:
             brand = next((b for b in _HEATPUMP_BRAND_TO_DRIVER if _has(_candidate(head), re.compile(b, re.I))), None)
             driver = _HEATPUMP_BRAND_TO_DRIVER.get(brand)
             heat_pump = {
@@ -753,9 +788,15 @@ def discover_house(entities: list[dict] | None = None) -> dict:
             any(e["e"].startswith("switch.") and OCPP_SWITCH_SUFFIX.search(e["e"]) for e in ents)
             and any(e["e"].startswith("number.") and OCPP_NUMBER_SUFFIX.search(e["e"]) for e in ents)
         )
-        if not (_has(_candidate(head), CHARGER_MAKERS) or is_ocpp):
+        is_cfos = not is_ocpp and _has(_candidate(head), CFOS_POWERBRAIN)
+        if not (_has(_candidate(head), CHARGER_MAKERS) or is_ocpp or is_cfos):
             continue
+        cfos_entities = _cfos_charger_entities(ents) if is_cfos else None
+        if is_cfos and not cfos_entities:
+            continue  # do not classify a cFos meter/hub or guess incomplete control mappings
         status_e = next((e for e in ents if e["e"].startswith("sensor.") and _has(e.get("n"), re.compile("status", re.I))), None)
+        if cfos_entities:
+            status_e = next(e for e in ents if e["e"] == cfos_entities["status"])
         if not status_e:
             # Ingen statussensor = sannolikt integrationens egen konto-/hubb-enhet (t.ex.
             # Easees molnkonto som en egen "enhet" i HA:s register), inte en fysisk laddare -
@@ -769,6 +810,10 @@ def discover_house(entities: list[dict] | None = None) -> dict:
             "status_entity": status_e["e"] if status_e else None,
             "driver": driver, "driver_known": driver in CHARGER_DRIVER_REGISTRY,
         }
+        if cfos_entities:
+            charger["generic_suggestion"] = {"driver": "generic", "entities": cfos_entities}
+            chargers.append(charger)
+            continue
         if driver == "easee":
             charger.update(_easee_mapping(ents, status_e))
         if driver is None:

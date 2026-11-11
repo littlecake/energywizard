@@ -13,7 +13,7 @@ ett helt nytt språk? Det tar några minuter, och du behöver inte kunna program
 4. Tryck **Commit changes** och sedan **Propose changes**. Klart. Vi tittar på det och tar in det.
 
 `#` står för ett tal eller ett värde, till exempel `"Laddar # kW": "Charging # kW"`. Behåll lika
-många `#` i översättningen. En tom översättning (`""`) betyder att svenskan visas tills någon fyller i.
+många `#` i översättningen. Namngivna platshållare som `{currency}` och `{name}` är också värden: behåll dem exakt, men flytta dem vid behov för naturlig ordföljd. De fylls i av programmet och ska inte översättas. En tom översättning (`""`) betyder att svenskan visas tills någon fyller i.
 
 ## Hitta texter som saknas
 
@@ -39,8 +39,10 @@ new language? It takes a few minutes, and you do not need to know how to code.
 
 **Fix a text:** open [`smartbox/i18n/en.json`](smartbox/i18n/en.json) on GitHub, press the pencil
 (Edit), change the text on the right of `"Swedish text": "translation"`, then **Commit changes** and
-**Propose changes**. `#` stands for a number or a value. Keep the same number of `#`. An empty
-translation (`""`) shows the Swedish text until someone fills it in.
+**Propose changes**. `#` stands for a number or a value. Keep the same number of `#` in the same order.
+Named placeholders such as `{currency}` and `{name}` are filled in by the application: keep their
+names exactly, but move them if the translation needs a different word order. Do not translate the
+placeholder names. An empty translation (`""`) shows the Swedish text until someone fills it in.
 
 **Find missing texts:** in the web app, **Settings → Language → Download texts that are not translated yet**.
 
