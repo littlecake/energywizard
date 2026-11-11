@@ -135,6 +135,45 @@ def _fill(text, nums):
     return re.sub("#", lambda m: next(it, "#").replace(",", "."), text)
 
 
+NAMED = re.compile(r"\{([a-z][a-z0-9_]*)\}", re.I)
+_named_cache = {"dict": None, "templates": []}
+
+
+def _named_lookup(core, d):
+    if _named_cache["dict"] is not d:
+        templates = []
+        for key, value in d.items():
+            if not isinstance(value, str) or not value or key.startswith("_"):
+                continue
+            parts = list(NAMED.finditer(key))
+            if not parts or len(parts) > 8 or len(NAMED.sub("", key).strip()) < 4:
+                continue
+            names = [p[1] for p in parts]
+            if set(names) != set(NAMED.findall(value)):
+                continue
+            pattern, at = "^", 0
+            for p in parts:
+                pattern += re.escape(key[at:p.start()]) + "(.+?)"
+                at = p.end()
+            templates.append((re.compile(pattern + re.escape(key[at:]) + "$"), names, value))
+        _named_cache.update(dict=d, templates=templates)
+    if len(core) > 1000:
+        return None
+    for rx, names, value in _named_cache["templates"]:
+        match = rx.fullmatch(core)
+        if not match:
+            continue
+        params = {}
+        valid = True
+        for name, captured in zip(names, match.groups()):
+            if name in params and params[name] != captured:
+                valid = False
+            params[name] = captured
+        if valid:
+            return NAMED.sub(lambda m: params[m[1]], value)
+    return None
+
+
 def _lookup(core, d):
     if core in d:
         return d[core]
@@ -142,7 +181,7 @@ def _lookup(core, d):
     key = NUM.sub("#", core)
     if key in d:
         return _fill(d[key], nums)
-    return None
+    return _named_lookup(core, d)
 
 
 def tr(s: str, lang: str | None = None) -> str:
@@ -198,3 +237,4 @@ def install_print() -> None:
 
     translated._ew_tr = True
     builtins.print = translated
+
