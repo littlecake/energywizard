@@ -24,6 +24,10 @@ MIN_WRITE_INTERVAL_S = 10.0
 
 # OCPP 1.6 connector-status (och vanliga generiska ord) -> samma ord som Easee-drivrutinen använder.
 _STATUS = {
+    # cFos Powerbrain sensor.py publishes numbered display values, not OCPP words (#226).
+    "1:standby": "disconnected", "2:carconnected": "awaiting_start",
+    "3:charging": "charging", "4:charging/vent": "charging",
+    "5:error": "offline", "6:offline": "offline",
     "available": "disconnected", "preparing": "awaiting_start", "charging": "charging",
     "suspendedev": "completed", "suspendedevse": "paused", "finishing": "completed",
     "reserved": "awaiting_start", "unavailable": "offline", "faulted": "offline",
