@@ -19,7 +19,8 @@ def bat(ents):
 def test_goodwe():
     b = bat([E("sensor.gw_soc", "Battery State of Charge", m="GoodWe", dc="battery", u="%"),
              E("sensor.gw_pbat", "Battery Power", m="GoodWe", dc="power", u="W", st="-300"),
-             E("select.gw_mode", "Inverter operation mode", m="GoodWe", st="general")])
+             {**E("select.gw_mode", "Inverter operation mode", m="GoodWe", st="general"),
+              "options": ["general", "eco_charge", "eco_discharge"]}])
     gs = b["generic_suggestion"]
     assert gs["preset"] == "goodwe" and gs["modes"] == {"auto": "general", "charge": "eco_charge", "discharge": "eco_discharge"}
     assert gs["entities"]["mode_select"] == "select.gw_mode"

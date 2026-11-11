@@ -1893,7 +1893,7 @@ async function runDiscovery(ev, cached) {
     if (!item) return `<div class="card" style="margin-bottom:16px"><h2>${icon} ${title}</h2><div class="note">Inget hittades i Home Assistant${title === "Värmepump" ? " - normalt om din pump pratar direkt via Modbus istället för via en HA-integration (t.ex. Thermia/Husdata). Sätt heat_pump.enabled: true och fyll i anslutningen för hand i den nedladdade filen efteråt." : ""}.</div></div>`;
     return `<div class="card" style="margin-bottom:16px"><h2>${icon} ${title}</h2>
       <label><input type="checkbox" class="pick" data-cat="${title}" checked> Använd detta fynd</label> ${driverTag(item, title)}
-      <div class="note" style="margin-top:6px;font-size:.8rem">${fields}</div></div>`;
+      <div class="note" style="margin-top:6px;font-size:.8rem">${fields}</div>${item.note ? `<div class="note" style="margin-top:6px">${esc(item.note)}</div>` : ""}</div>`;
   };
   html += simpleCard("♨️", "Värmepump", d.heat_pump, d.heat_pump ? (d.heat_pump.note || `${d.heat_pump.device_name} (${d.heat_pump.entity_count} entiteter)`) : "");
   html += simpleCard("☀️", "Solceller", d.solar, d.solar ? `Effekt: ${d.solar.pv_power_entity || "-"} · Dagsenergi: ${d.solar.today_kwh_entity || "-"}` : "");

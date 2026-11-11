@@ -2146,5 +2146,9 @@
   "När brukar ni bada? Utanför badtiderna får badet svalna till eco-golvet och värms upp i tid före nästa badtid, på de billigaste timmarna. Inga badtider = badet hålls varmt som idag.": "Kdy obvykle používáte vířivku? Mimo tyto časy může vychladnout na úsporné minimum a v nejlevnějších hodinách se včas ohřeje před dalším použitím. Bez rozvrhu zůstává teplá jako dosud.",
   "Inget laddschema för den här bilen.": "Pro toto auto není nastaven rozvrh nabíjení.",
   "Inget i loggen.": "V záznamu nejsou žádné položky.",
-  "Inga aviseringar än.": "Zatím žádná oznámení."
+  "Inga aviseringar än.": "Zatím žádná oznámení.",
+  "Läsning utan styrning föreslås tills lägena har verifierats i Home Assistant": "",
+  "Eco-lägenas funktion och effekt-/SOC-gränser måste verifieras för din integration och firmware": "",
+  "GoodWe: endast lägen som Home Assistant erbjuder föreslås": "",
+  "GoodWe: lägeslistan eller normalläget general saknas": ""
 }
