@@ -16,7 +16,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 CHANGELOG = HERE / "CHANGELOG.md"
 CONFIG = HERE / "config.yaml"
-_VER = r"(\d+\.\d+\.\d+)"
+_VER = r"(\d+\.\d+\.\d+(?:-cz\.\d+)?)"
 
 
 def changelog_version(text: str | None = None) -> str:
@@ -36,7 +36,11 @@ def config_version(text: str | None = None) -> str:
 
 
 def _key(v: str) -> tuple:
-    return tuple(int(x) for x in v.split("."))
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-cz\.(\d+))?", v)
+    if not m:
+        raise ValueError(f"Invalid add-on version: {v}")
+    major, minor, patch, fork = m.groups()
+    return (int(major), int(minor), int(patch), 0 if fork is not None else 1, int(fork or 0))
 
 
 def set_version(text: str, version: str, image: str) -> str:

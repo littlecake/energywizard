@@ -1,3 +1,83 @@
+# Release notes
+
+This section documents the Czech fork in English. The original upstream release
+history is preserved below.
+
+## Unreleased
+
+
+- Document the contribution language policy: Czech, English and Swedish UI;
+  English for non-localized diagnostics, technical documentation, commit messages
+  and release notes.
+- Verify all 82 messages added by this fork in Czech, English and Swedish
+  (246 translation checks).
+
+## 1.2.65-cz.7 (2026-11-10)
+
+- Prevent hybrid inverter grid, battery and load sensors from being suggested as solar production.
+- Allow an owner to update existing solar sensor mappings without replacing the rest of the house configuration.
+
+## 1.2.65-cz.6 (2026-11-10)
+
+- Synchronize with upstream and retain the Czech tariff and personal shadow-mode packaging.
+- Compare current and scheduled purchase prices consistently for fixed and HDO contracts.
+- Validate the complete tariff configuration when settings are partially updated.
+- Support Czech fork version identifiers in the add-on version utility.
+- Validate with the upstream PostgreSQL test suite.
+
+## 1.2.65-cz.5 (2026-11-10)
+
+- Add optional Solcast forecasts through the existing Home Assistant integration.
+- Add source selection and installation guidance in Czech, English and Swedish.
+- Preserve native forecast intervals and use time-weighted hourly energy totals.
+- Fall back to the internal model for unavailable, stale or uncovered intervals.
+- Keep the internal clear-sky reference and measured PV sensors separate.
+- Run the 15 Solcast adapter tests alongside tariff and translation tests during
+  the add-on build. Keep forced shadow mode enabled.
+- Upstream proposal: https://github.com/murre87/energywizard/pull/248.
+
+## 1.2.65-cz.4 (2026-11-10)
+
+- Add a Czech purchase mode using final NT/VT prices and a future HDO schedule.
+- Let users enter both prices manually or read both configured rates from the
+  ČEZ HDO integration. Never project its instantaneous price over future periods.
+- Treat these as final prices including VAT, distribution and supplier fees.
+  Do not add the existing purchase fees, distribution or time-of-use surcharge again.
+- Use saved rates during an HA outage and the higher rate outside known schedule
+  coverage. Reject missing manual prices and unconfigured integration prices.
+- Add an in-app ČEZ HDO installation guide with HACS/Marketplace links. Open the
+  guide automatically when no compatible schedule is found.
+- Add corresponding English and Czech catalog entries; retain Swedish UI source text.
+- Validation: 22 tariff tests, 10 Python translation tests, 1,906 JavaScript checks
+  and focused form checks passed. The full upstream PostgreSQL suite was not run.
+
+## 1.2.65-cz.3 (2026-11-10)
+
+- Show and apply the ČEZ HDO adapter only when Czechia is selected.
+- Version the browser translation script by its content hash so an older cached
+  runtime cannot leave new currency labels in Swedish.
+- Verify switching between Sweden and Czechia in the running HA installation.
+
+## 1.2.65-cz.2 (2026-11-10)
+
+- Support named values in the existing browser and Python translation catalogs,
+  preserving device names and currency symbols.
+- Translate dynamic fee labels, contract selectors and HDO help text.
+- Hide fixed-price inputs when a spot contract is selected; keep blank prices unset.
+- Run focused Python checks as part of the fork add-on build.
+
+## 1.2.65-cz.1 (2026-11-10)
+
+- Add the Czech translation and language selector entry.
+- Add the Czech country preset, CZK/Kč and configurable 21% default VAT.
+- Read raw Czech OTE prices from Home Assistant, including quarter-hour and negative prices.
+- Support independent fixed/spot import and export contracts and optional ČEZ HDO
+  distribution rates using future NT/VT intervals.
+- Build the HA add-on from this fork with forced shadow mode and ingress access.
+  These deployment settings are specific to the fork, separate from upstream proposals.
+
+---
+
 # Ändringar
 
 ## 1.2.65 (2026-11-10)

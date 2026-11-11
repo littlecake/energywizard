@@ -1,40 +1,21 @@
-name: "EnergyWizard"
-version: "1.2.65"
-image: "ghcr.io/murre87/energywizard"
+name: "EnergyWizard CZ (Koláček fork)"
+version: "1.2.65-cz.7"
 slug: "smartbox"
-description: "Minut-för-minut styrning av elbil, värmepump, solcellsexport, spabad och huvudsäkring efter spotpriset - helt via Home Assistants egna entiteter."
-url: "https://github.com/murre87/energywizard"
+description: "Czech translation, OTE and HDO tariffs. Shadow mode is forced."
+url: "https://github.com/littlecake/energywizard"
 arch:
   - amd64
   - aarch64
 startup: application
-boot: auto
+boot: manual
 homeassistant_api: true
 map:
-  - type: addon_config
+  - type: app_config
     read_only: false
-# Gränssnitten nås direkt på värdens portar, precis som i docker-compose-driften:
-# webdashboard (dator/surfplatta, entitetsväljaren) på 8503 och mobilappen (ewapp) på 8502.
-ports:
-  8503/tcp: 8503
-  8502/tcp: 8502
-ports_description:
-  8503/tcp: "Webdashboard (dator/surfplatta, entitetsväljaren)"
-  8502/tcp: "Mobilappen (ewapp)"
-# "Öppna webbgränssnittet" och panelen i sidomenyn går via HA Ingress (issue #118): fungerar även via Nabu Casa,
-# https och HA-appen, och HA:s inloggning gäller. Portarna ovan finns kvar för direkt åtkomst och mobilappen.
 ingress: true
 ingress_port: 8503
 panel_icon: mdi:lightning-bolt
-panel_title: EnergyWizard
-# Telemetrin är obligatorisk sedan 1.2.45. De gamla telemetrivalen finns kvar som valfria i schemat bara så att
-# befintliga installationer (som har dem sparade) inte stoppas av Supervisors validering - de läses inte.
+panel_title: "EnergyWizard"
 options: {}
 schema:
   dashboard_password: "password?"
-  telemetry_opt_in: "bool?"
-  anonymous_ping: "bool?"
-  telemetry_endpoint: "str?"
-  nibe_local_username: "str?"
-  nibe_local_password: "password?"
-  nibe_local_tls_pin_sha256: "str?"
