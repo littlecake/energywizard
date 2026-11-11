@@ -11,6 +11,7 @@ Select Česko / CZ: currency CZK (Kč), default VAT 21%, editable. Select the **
 electricity sensor supplied by `rnovacek/homeassistant_cz_energy_spot_prices` in HA,
 configured in CZK/kWh or Kč/MWh. Its timestamp-to-price attributes contain today and
 tomorrow. Do not select a buy/sell template sensor which already includes fees.
+Even with fixed purchase or HDO prices, a working spot-price sensor remains required for the existing planning pipeline and spot-based export. These modes do not provide a standalone price feed.
 No automatic EUR/CZK conversion is performed. Raw Czech spot defaults to excluding
 VAT; explicitly select "already includes VAT" if applicable to the chosen source.
 
@@ -20,6 +21,24 @@ Quarter-hour prices and negative prices are retained. Missing tomorrow data is
 retried by the existing price refresh loop; it is never replaced with Swedish data.
 
 ## Contracts and distribution
+
+For Czechia, buying has three modes: **spot**, **fixed energy price**, and
+**final NT/VT price according to HDO**. The HDO mode always requires a future
+schedule. Users choose either two manually entered final prices or both rates
+published by the ČEZ HDO schedule sensor (`low_tariff_price`, `high_tariff_price`).
+The instantaneous current-price sensor is never projected into the future.
+In this mode prices already include VAT, distribution and supplier fees; no
+common buy fees, distribution adders, time-of-use surcharge or VAT is added again.
+The two integration rates are validated and saved when settings are saved, used
+as an outage fallback, and refreshed from HA during normal operation. Both zero
+integration rates are treated as unconfigured; explicit manual zero rates remain
+possible. Outside schedule coverage the higher rate is used. Export is unchanged.
+
+Only Czechia exposes HDO settings. The embedded installation guide links to the
+ČEZ HDO repository, HACS/Marketplace, and the integration's configuration guide.
+It opens automatically if no compatible schedule is found. The integration
+supports ČEZ Distribuce supply points; schedules from other distributors are not
+currently supported. No installation or HA restart is performed automatically.
 
 Buy and sell can independently use spot or a fixed price. Fixed buy is the energy
 component including VAT. Existing buy fees are added, then optional HDO distribution
@@ -37,7 +56,10 @@ included in this optimizer.
 The adapter does not change the tariff or any device in HA. Schedule reads are
 cached for 60 seconds. On missing, invalid, overlapping or expired coverage, the
 higher configured distribution rate is used. A current NT binary sensor is never
-projected over tomorrow. HDO only affects buying. The shared SQL expression uses
+projected over tomorrow. ČEZ HDO emits an all-day VT interval when schedule data is
+missing. Because this is indistinguishable from a real all-day VT interval, it is
+treated as unknown and uses the higher rate; this can overestimate cost when VT is
+actually valid all day and NT is more expensive. HDO only affects buying. The shared SQL expression uses
 the same half-open interval boundaries as the Python calculation. Historical
 intervals outside the available schedule conservatively use the higher rate;
 this is not an invoice reconstruction system.
@@ -49,12 +71,21 @@ of unrelated integrations. The fixed-price and distribution options are optional
 
 ## Validation
 
-`python3 scripts/test_cz_tariffs_without_db.py` runs 15 focused unittest cases
-against the real tariff/parser code, stubbing unused database imports only.
-In the full project environment, run `PYTHONPATH=smartbox python -m unittest discover
--s tests -p test_cz_tariffs.py`, and the existing price-country, source, VAT and
-TOU pytest suites. Full upstream PostgreSQL-backed tests require its normal CI
-services and dependencies; they were not run on this local partial checkout.
+The tests cover Czech OTE attribute parsing, units, negative prices, missing
+intervals, time changes, optional HDO schedules and fixed-price contracts.
+They compare the Python and PostgreSQL purchase formulas at NT/VT boundaries,
+including missing schedule coverage. They also exercise price ranking and
+check settings error messages against the browser translator.
+
+```bash
+python3 scripts/test_cz_tariffs_without_db.py
+python -m pytest -q tests/test_cz_tariffs.py tests/test_cz_tariffs_integration.py \
+  tests/test_cz_tariff_ui.py tests/test_issue_179_tidstariff_pump.py
+```
+
+The integration tests need the project's normal PostgreSQL test service. The
+browser interaction check was run with synthetic HA responses; it does not
+verify the behavior of a particular electricity contract or physical device.
 
 References:
 - https://github.com/rnovacek/homeassistant_cz_energy_spot_prices

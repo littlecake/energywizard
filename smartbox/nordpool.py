@@ -52,7 +52,7 @@ COUNTRIES = {
     "AT": {"name": "Österrike", "vat_pct": 20.0, "currency": "EUR", "areas": ["AT"]},
     "FR": {"name": "Frankrike", "vat_pct": 20.0, "currency": "EUR", "areas": ["FR"]},
     "PL": {"name": "Polen", "vat_pct": 23.0, "currency": "PLN", "areas": ["PL"]},
-    "CZ": {"name": "Česko", "vat_pct": 21.0, "currency": "CZK", "areas": ["CZ"]},
+    "CZ": {"name": "Tjeckien", "vat_pct": 21.0, "currency": "CZK", "areas": ["CZ"], "timezone": "Europe/Prague"},
     "GB": {"name": "Storbritannien", "vat_pct": 5.0, "currency": "GBP", "areas": ["GB"]},
     "AU": {"name": "Australia", "vat_pct": 10.0, "currency": "AUD", "areas": ["AU"],
            "timezone": "Australia/Sydney"},
@@ -93,6 +93,9 @@ def cost_settings() -> dict:
         "sell_extra": _num(_setting("price_sell_extra", "PRICE_SELL_EXTRA"), preset.get("sell_extra", 0.0)),
         "buy_mode": str(_setting("price_buy_mode", "PRICE_BUY_MODE", "spot")),
         "buy_fixed": _num(_setting("price_buy_fixed", "PRICE_BUY_FIXED"), None),
+        "buy_nt": _num(_setting("price_buy_nt", "PRICE_BUY_NT"), None),
+        "buy_vt": _num(_setting("price_buy_vt", "PRICE_BUY_VT"), None),
+        "hdo_price_source": str(_setting("price_hdo_price_source", "PRICE_HDO_PRICE_SOURCE", "manual")),
         "sell_mode": str(_setting("price_sell_mode", "PRICE_SELL_MODE", "spot")),
         "sell_fixed": _num(_setting("price_sell_fixed", "PRICE_SELL_FIXED"), None),
         "hdo_entity": str(_setting("price_hdo_entity", "PRICE_HDO_ENTITY", "")),
@@ -240,10 +243,23 @@ def tou_spot_extra(t, c=None) -> float:
     return extra if prices_include_vat() else extra / _vat_factor()
 
 
+def planning_buy_price(spot, t, c=None):
+    """Purchase price in the spot-price scale used by the priority engine."""
+    c = c or cost_settings()
+    if c.get("buy_mode", "spot") == "spot" and not (c.get("country") == "CZ" and c.get("hdo_entity")):
+        extra = tou_spot_extra(t, c)
+        return spot + extra if extra else spot
+    scale = 1.0 if prices_include_vat() else _vat_factor()
+    return (full_buy_cost(spot, t) - c["buy_extra"]) / scale
+
+
 def full_buy_cost(spot: float, t=None) -> float:
     """Verklig köpkostnad per kWh inkl moms, nätöverföring och skatt (i landets valuta). Dubbelräknar aldrig
     moms oavsett vilken bas spotpriset har. Med t (timmens start) räknas tidstariffen in."""
     c = cost_settings()
+    if c["country"] == "CZ" and c["buy_mode"] == "hdo":
+        from distribution_tariff import purchase_at
+        return purchase_at(t, c)
     from distribution_tariff import distribution_at
     extra = c["buy_extra"] + tou_extra_at(t, c) + distribution_at(t, c)
     if c["buy_mode"] == "fixed":
@@ -281,6 +297,9 @@ def sql_buy_cost_expr(col: str, tcol: str | None = None) -> str:
     """Samma formel som SQL-uttryck (Postgres), för ställen som räknar i databasen
     istället för rad-för-rad i Python (pump_runtime.py, smartdashboard). tcol = tidskolumnen (tidstariffen)."""
     c = cost_settings()
+    if c["country"] == "CZ" and c["buy_mode"] == "hdo":
+        from distribution_tariff import sql_purchase_expr
+        return sql_purchase_expr(tcol, c)
     from distribution_tariff import sql_distribution_expr
     tou = _sql_tou(c, tcol) + sql_distribution_expr(tcol, c)
     if c["buy_mode"] == "fixed":
@@ -380,6 +399,7 @@ def _unit_divisor(unit: str, key: str = "") -> float:
 def parse_price_attributes(attrs: dict, unit: str = "") -> list:
     """[(start, end, pris per kWh)] ur en prissensors attribut, sorterat och utan dubbletter. Tomt om inget känns igen."""
     points = {}
+    top_level_starts = set()
     for name in PRICE_LIST_ATTRS:
         items = (attrs or {}).get(name)
         if not isinstance(items, list):
@@ -399,6 +419,7 @@ def parse_price_attributes(attrs: dict, unit: str = "") -> list:
             t = _parse_ts(k)
             if t is not None:
                 points[t] = (None, float(v) / _unit_divisor(unit))
+                top_level_starts.add(t)
     if not points:                                   # tidsstämpel -> pris (ett attribut med en dict)
         for v in (attrs or {}).values():
             if isinstance(v, dict) and v and all(isinstance(x, (int, float)) for x in v.values()):
@@ -415,7 +436,10 @@ def parse_price_attributes(attrs: dict, unit: str = "") -> list:
         end, price = points[t]
         if end is None:
             step = (starts[i + 1] - t) if i + 1 < len(starts) else (t - starts[i - 1] if i else timedelta(hours=1))
-            end = t + min(step, cadence)
+            # The Czech timestamp-keyed feed has a consistent cadence; do not
+            # let its gaps fill with stale prices. Preserve existing inference
+            # for other integrations, which may mix hourly and shorter slots.
+            end = t + min(step, cadence if t in top_level_starts else timedelta(hours=1))
         out.append((t, end, price))
     return out
 
@@ -471,6 +495,11 @@ def _ha_state(entity):
     return response.json()
 
 
+def _is_czech_price_unit(unit):
+    """Accept only supported CZK energy units; never guess a conversion."""
+    return str(unit or "").strip().casefold() in ("czk/kwh", "czk/mwh", "kč/kwh", "kč/mwh")
+
+
 def fetch_ha_nordpool_and_save(date_obj, refresh_all=False):
     """Import HA prices. Fixed feeds insert once; refreshing feeds update uncompleted slots."""
     date_str = date_obj.strftime("%Y-%m-%d")
@@ -485,7 +514,7 @@ def fetch_ha_nordpool_and_save(date_obj, refresh_all=False):
                 continue
             attrs = state.get("attributes") or {}
             unit = attrs.get("unit_of_measurement", "")
-            if cost_settings()["country"] == "CZ" and not str(unit).lower().startswith(("czk/", "kč/")):
+            if cost_settings()["country"] == "CZ" and not _is_czech_price_unit(unit):
                 print(f"❌ Czech price sensor ({entity}) must use CZK/kWh or CZK/MWh; currency conversion is not automatic.")
                 continue
             amber = "forecasts" in attrs
@@ -509,6 +538,8 @@ def fetch_ha_nordpool_and_save(date_obj, refresh_all=False):
                 try:
                     current = _ha_state(current_entity)
                     ca = (current or {}).get("attributes") or {}
+                    if cost_settings()["country"] == "CZ" and not _is_czech_price_unit(ca.get("unit_of_measurement")):
+                        continue
                     start, end = _parse_ts(ca.get("start_time")), _parse_ts(ca.get("end_time"))
                     value = float((current or {}).get("state")) / _unit_divisor(ca.get("unit_of_measurement", ""))
                     if start is not None and end is not None:
@@ -844,8 +875,7 @@ def get_price_info(cheap_hours_count=8):
         prices_tou = all_prices
         if (c.get("tou_extra") or c.get("hdo_entity") or c["buy_mode"] == "fixed") and all_prices:
             t0 = today_start.astimezone(timezone.utc)
-            scale = 1.0 if prices_include_vat() else _vat_factor()
-            prices_tou = [(full_buy_cost(p, t0 + timedelta(minutes=15 * i)) - c["buy_extra"]) / scale for i, p in enumerate(all_prices)]
+            prices_tou = [planning_buy_price(p, t0 + timedelta(minutes=15 * i), c) for i, p in enumerate(all_prices)]
         strategy = calculate_day_strategy(prices_tou, cheap_hours_count)
         strategy["prices_tou"] = prices_tou
         strategy["price_fallback"] = price_fallback  # main.py notiserar (deduppat) vid fallback
