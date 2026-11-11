@@ -726,7 +726,7 @@ def forecast_price_at(dt):
 # smartbox/ eller smartdashboard/ utanför denna fil).
 
 
-def calculate_day_strategy(all_prices, cheap_hours_count):
+def calculate_day_strategy(all_prices, cheap_hours_count, symbol="kr"):
     """
     Räknar ut dagens regleringsstrategi baserat på prisbilden.
 
@@ -769,7 +769,7 @@ def calculate_day_strategy(all_prices, cheap_hours_count):
             "hysteresis": 0.0,
             "dynamic_limit": dynamic_limit,
             "comfort_temp": 210,
-            "description": f"Billig dag (snitt {avg_p:.2f} kr, spread {spread:.2f} kr) – kör 21°C komfort"
+            "description": f"Billig dag (snitt {avg_p:.2f} {symbol}, spread {spread:.2f} {symbol}) – kör 21°C komfort"
         }
 
     # Skala hysteres: 15 % av spreaden, clampat 5–20 öre
@@ -780,7 +780,7 @@ def calculate_day_strategy(all_prices, cheap_hours_count):
         "hysteresis": hysteresis,
         "dynamic_limit": dynamic_limit,
         "comfort_temp": 210,
-        "description": f"Optimerar (snitt {avg_p:.2f} kr, spread {spread:.2f} kr → hysteres {hysteresis:.2f} kr)"
+        "description": f"Optimerar (snitt {avg_p:.2f} {symbol}, spread {spread:.2f} {symbol} → hysteres {hysteresis:.2f} {symbol})"
     }
 
 def quarter_price_profile(rows, start, end):
@@ -876,7 +876,7 @@ def get_price_info(cheap_hours_count=8):
         if (c.get("tou_extra") or c.get("hdo_entity") or c["buy_mode"] == "fixed") and all_prices:
             t0 = today_start.astimezone(timezone.utc)
             prices_tou = [planning_buy_price(p, t0 + timedelta(minutes=15 * i), c) for i, p in enumerate(all_prices)]
-        strategy = calculate_day_strategy(prices_tou, cheap_hours_count)
+        strategy = calculate_day_strategy(prices_tou, cheap_hours_count, symbol=c.get("symbol", "kr"))
         strategy["prices_tou"] = prices_tou
         strategy["price_fallback"] = price_fallback  # main.py notiserar (deduppat) vid fallback
         dynamic_limit = strategy.get("dynamic_limit")

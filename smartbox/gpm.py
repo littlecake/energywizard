@@ -292,13 +292,14 @@ class GlobalPriorityManager:
             actions[f"{cid}_limit_a"] = 0
             actions[f"{cid}_set_phases"] = None
         
-        _pt = f"{price_cmp:.2f} kr" + (f" inkl. tidstariff {tou_now:.2f}" if tou_now else "")
+        symbol = nordpool.cost_settings().get("symbol", "kr")
+        _pt = f"{price_cmp:.2f} {symbol}" + (f" inkl. tidstariff {tou_now:.2f}" if tou_now else "")
         if base_pump_mode == "CHEAP":
-            actions["log"].append(f"🟢 Grundläge: Billig el ({_pt} <= {dyn_limit - hysteresis:.2f} kr). Värmepump och Varmvatten i normaldrift.")
+            actions["log"].append(f"🟢 Grundläge: Billig el ({_pt} <= {dyn_limit - hysteresis:.2f} {symbol}). Värmepump och Varmvatten i normaldrift.")
         elif price_cmp < (dyn_limit + hysteresis):
             actions["log"].append(f"⏸️ Grundläge: Gråzon ({_pt}). Ligger kvar i läge '{base_pump_mode}'.")
         else:
-            actions["log"].append(f"🔴 Grundläge: Dyr el ({_pt} >= {dyn_limit + hysteresis:.2f} kr). Värmepump styrs ner till sparläge.")
+            actions["log"].append(f"🔴 Grundläge: Dyr el ({_pt} >= {dyn_limit + hysteresis:.2f} {symbol}). Värmepump styrs ner till sparläge.")
 
         self.avg_net_history.append(avg_net)
         if len(self.avg_net_history) > 5:
@@ -899,7 +900,7 @@ class GlobalPriorityManager:
                                     and max_future_price >= day_p85 and price_cmp <= day_p50
                                     and day_p85 > day_p50 * 1.10):
                                 target_t = min(target_t + 1.0, indoor_max)
-                                actions["log"].append(f"🔋 Prio 5 (HUS): Prediktiv överladdning! Priset stiger snart till {max_future_price:.2f} kr (dygnets topp). Boostar innetempen (+1°C) i förväg för att bygga termiskt batteri.")
+                                actions["log"].append(f"🔋 Prio 5 (HUS): Prediktiv överladdning! Priset stiger snart till {max_future_price:.2f} {symbol} (dygnets topp). Boostar innetempen (+1°C) i förväg för att bygga termiskt batteri.")
                     
                     actions["pump_mode"] = "CHEAP"
                     actions["pump_target_temp"] = target_t
@@ -1136,7 +1137,7 @@ class GlobalPriorityManager:
                     for i_, c in enumerate(_ok):
                         _share = _avail - _each * (len(_ok) - 1) if i_ == len(_ok) - 1 else _each
                         actions[f"{c}_limit_a"] = max(EV_MIN_CHARGE_AMPS, min(specs[c]["max_a"], _share))
-            actions["log"].append(f"💰 EKONOMISKT OPTIMUM: Betalt för att förbruka (spot {price:+.2f} kr/kWh) → maxar nätuttag (bilar från nätet) + stryper solen till 0%.")
+            actions["log"].append(f"💰 EKONOMISKT OPTIMUM: Betalt för att förbruka (spot {price:+.2f} {symbol}/kWh) → maxar nätuttag (bilar från nätet) + stryper solen till 0%.")
 
         # --- LUFTFUKTIGHET: fuktig luft känns kallare -> höj pumpens mål lite (upp till +1°C) ----------
         # 55% RH eller lägre: ingen ändring. 75% eller mer: +1.0°C. Linjärt däremellan.

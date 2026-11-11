@@ -567,24 +567,34 @@ def plan_slots(car: str) -> list:
     return [{"t": int(t.replace(tzinfo=TZ).timestamp() * 1000), "kw": round(float(kw), 1)} for t, kw in rows]
 
 def solar_forecast_w(hours: list) -> dict:
-    """Prognosticerad solproduktion (W) per timme: husets inlärda klarhimmelsprofil (smartboxens solar_profile) x molnprognosen, samma formel som
-    smartboxens weather.get_smart_solar_w. {epoch-ms: W}; tom om profil eller väderprognos saknas."""
+    """Hourly PV power (epoch milliseconds -> W) from HA or the learned model.
+
+    Use time-weighted external intervals where covered; retain the existing
+    learned/weather fallback elsewhere, including when HA is unavailable.
+    """
     import pickle
+    import ha_solar_forecast
+    external = {}
+    for h in hours:
+        value = ha_solar_forecast.hourly_w(h)
+        if value is not None:
+            external[int(h.timestamp() * 1000)] = round(value)
     try:
         with ENGINE.connect() as c:
             r = c.execute(text("SELECT solar_profile FROM system_settings WHERE id = 1")).fetchone()
             prof = pickle.loads(bytes(r[0])) if r and r[0] else {}
             if not prof or not hours:
-                return {}
+                return external
             rows = c.execute(text("SELECT timestamp, cloud_cover FROM weather_forecast WHERE timestamp >= :a AND timestamp <= :b"), {"a": hours[0], "b": hours[-1]}).fetchall()
     except Exception:
-        return {}
+        return external
     cloud = {t.astimezone(TZ).replace(minute=0, second=0, microsecond=0): float(cc) for t, cc in rows if cc is not None}
     out = {}
     for h in hours:
         cc, roof = cloud.get(h), prof.get((h.month, h.hour))
         if cc is not None and roof is not None:
             out[int(h.timestamp() * 1000)] = round(max(0.0, roof * (1.0 - cc / 100.0 * 0.85)))
+    out.update(external)
     return out
 
 def prices() -> dict:
@@ -1061,7 +1071,8 @@ def plan_api():
             sun = None
     brief = plan_brief.build_brief(now, [(r[0], float(r[1])) for r in prices if r[1] is not None],
                                    [tuple(r) for r in ev_rows], nordpool.calculate_day_strategy,
-                                   int(ch[0]) if ch and ch[0] else 8, mode_row[0] if mode_row else None, battery_rows=[tuple(r) for r in bat_rows])
+                                   int(ch[0]) if ch and ch[0] else 8, mode_row[0] if mode_row else None, battery_rows=[tuple(r) for r in bat_rows],
+                                   currency=nordpool.cost_settings()["currency"], symbol=nordpool.cost_settings()["symbol"])
     return {"ok": True, **brief, "solar_days": sun}
 
 
@@ -1263,9 +1274,11 @@ def month_peaks() -> list:
 def insights(st: dict, ov: dict, pr: dict) -> list:
     """Det som är intressant just nu, på vanlig svenska: elpris och billigaste fönstret, vad AI:n faktiskt gör, planerad laddning, sol och besparing. Rader som bara säger att något är avstängt tas inte med."""
     out = []
+    import nordpool
+    symbol = nordpool.cost_settings()["symbol"]
     hrs = pr.get("hours") or []
     if pr.get("now") is not None:
-        t = f"Elpriset är {pr['now']:.2f} kr/kWh ({pr.get('level') or '–'})."
+        t = f"Elpriset är {pr['now']:.2f} {symbol}/kWh ({pr.get('level') or '–'})."
         fut = [h for h in hrs if not h["now"]]
         if fut and len(hrs) >= 4:
             m = min(fut, key=lambda h: h["p"])
@@ -1273,7 +1286,7 @@ def insights(st: dict, ov: dict, pr: dict) -> list:
             j = i
             while j + 1 < len(fut) and fut[j + 1]["p"] <= m["p"] + 0.08:
                 j += 1
-            t += f" Billigast {m['t']}–{(int(fut[j]['t']) + 1) % 24:02d} ({m['p']:.2f} kr)." if m["p"] < pr["now"] else " Det blir inte billigare de närmaste timmarna."
+            t += f" Billigast {m['t']}–{(int(fut[j]['t']) + 1) % 24:02d} ({m['p']:.2f} {symbol})." if m["p"] < pr["now"] else " Det blir inte billigare de närmaste timmarna."
         out.append({"i": "⚡", "t": t})
     log = val(st, "sensor.smartbox_beslut") or ""
     try:
@@ -1308,7 +1321,7 @@ def insights(st: dict, ov: dict, pr: dict) -> list:
         out.append({"i": "☀️", "t": t + "."})
     sv = num(st, "sensor.smartbox_besparing_idag")
     if sv is not None and sv > 0.5:
-        out.append({"i": "💰", "t": f"EnergyWizard har sparat {sv:.1f} kr idag jämfört med ett vanligt hushåll utan styrning (inkl. moms)."})
+        out.append({"i": "💰", "t": f"EnergyWizard har sparat {sv:.1f} {symbol} idag jämfört med ett vanligt hushåll utan styrning (inkl. moms)."})
     return out[:5]
 
 
@@ -1383,7 +1396,8 @@ async def energy_action(what: str, request: Request):
     if what == "floor":
         f = round(max(-1.0, min(5.0, float(v))), 2)
         set_override("solar_export_price_limit", str(f))
-        return {"ok": True, "msg": f"Begränsar export under {f:.2f} kr/kWh"}
+        import nordpool
+        return {"ok": True, "msg": f"Begränsar export under {f:.2f} {nordpool.cost_settings()['symbol']}/kWh"}
     if what == "auto":
         set_override("solar_auto_export", "true" if v else "false")
         return {"ok": True, "msg": "Automatisk exportstyrning " + ("på" if v else "av")}

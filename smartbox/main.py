@@ -1017,16 +1017,10 @@ while True:
                     print(f"⚠️ Solutsikt: {_se}")
                 _sun_cache["t"] = time.time()
 
-            # Byt ut statisk solprognos mot ML-Tvillingen
+            # The forecast already uses the selected HA source or learned fallback.
+            # Keep the profile for the clear-sky diagnostics below, without replacing
+            # an external forecast with the internal model a second time.
             solar_profile = learning.get_solar_profile()
-            if solar_profile:
-                roof_max_now = solar_profile.get((now.month, now.hour))
-                if roof_max_now is not None:
-                    solar_now = max(0.0, roof_max_now * (1.0 - (cloud_cover / 100.0) * 0.85))
-                next_dt = now + timedelta(minutes=15)
-                roof_max_next = solar_profile.get((next_dt.month, next_dt.hour))
-                if roof_max_next is not None:
-                    solar_next = max(0.0, roof_max_next * (1.0 - (cloud_cover / 100.0) * 0.85))
             
             solar_data   = solar_driver.read_production()
             ha_temps     = homeassistant.read_temperatures()
@@ -1893,6 +1887,7 @@ while True:
                     _bplan = _battery["plan"] if battery_cfg["control"] == "styr" else None
                     _bdec = battery_control.decide({
                         "soc": battery_state.get("soc_pct"), "price": current_price, "avg_net_w": avg_net,
+                        "currency_symbol": nordpool.cost_settings()["symbol"],
                         "battery_w": battery_state.get("power_w"),
                         "meter_fresh": _meter_ok_at["t"] is not None and time.time() - _meter_ok_at["t"] < 120,
                         "fuse_state": fuse_model.check(_fuse_cfg["fuse_a"], _fuse_cfg["margin_a"])[0] if fuse_model.is_fresh() else "ok",
@@ -1903,7 +1898,7 @@ while True:
                         "planned_action": (_bplan or {}).get("action_now"), "plan_saving_kr": (_bplan or {}).get("saving_kr"),
                         "planned_power_w": (_bplan or {}).get("power_now_w"),
                         "learned_note": (battery_learning.describe(_battery["model"])
-                                         + (f" Igår sparade batteriet {_battery['model']['saving_yesterday_kr']:.0f} kr (uppmätt)."
+                                         + (f" Igår sparade batteriet {_battery['model']['saving_yesterday_kr']:.0f} {nordpool.cost_settings()['symbol']} (uppmätt)."
                                             if (_battery["model"] or {}).get("saving_yesterday_kr") is not None else "")) if _battery["model"] else None,
                     }, battery_cfg, battery_driver.supported_intents())
                     gpm_actions["log"].append(f"🔋 (BATTERI): {_bdec['reason']}")
@@ -2364,7 +2359,7 @@ while True:
                 _pub = {
                     "sensor.smartbox_inomhustemp": (_r1(indoor_temp), {"friendly_name": "Smartbox Inomhustemperatur", "unit_of_measurement": "°C", "device_class": "temperature", "state_class": "measurement"}),
                     "sensor.smartbox_luftfuktighet": (_r1(ha_temps.get("indoor_humidity")), {"friendly_name": "Smartbox Luftfuktighet", "unit_of_measurement": "%", "device_class": "humidity", "state_class": "measurement"}),
-                    "sensor.smartbox_elpris": (_r1(current_price, 3), {"friendly_name": "Smartbox Elpris", "unit_of_measurement": "kr/kWh", "icon": "mdi:cash", "nasta_pris": _r1(next_price, 3)}),
+                    "sensor.smartbox_elpris": (_r1(current_price, 3), {"friendly_name": "Smartbox Elpris", "unit_of_measurement": f"{nordpool.cost_settings()['symbol']}/kWh", "icon": "mdi:cash", "nasta_pris": _r1(next_price, 3)}),
                     "sensor.smartbox_maltemperatur": (_r1(current_chosen_temp / 10.0), {"friendly_name": "Smartbox Måltemperatur", "unit_of_measurement": "°C", "device_class": "temperature"}),
                     "sensor.smartbox_framledning": (_r1(forward_temp), {"friendly_name": "Smartbox Framledning", "unit_of_measurement": "°C", "device_class": "temperature", "retur": _r1(return_temp), "beraknad": _r1(calc_forward)}),
                     "sensor.smartbox_utetemperatur": (_r1(outdoor_temp), {"friendly_name": "Smartbox Utetemperatur", "unit_of_measurement": "°C", "device_class": "temperature"}),

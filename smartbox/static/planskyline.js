@@ -17,6 +17,13 @@
           export: "Discharging · selling", hold: "Holding", idle: "Idle", heatOn: "Pre-heating", heatOff: "Heat lowered", nothing: "Nothing special",
           legend: ["Tall building = expensive", "Lit window = house uses power", "Battery", "Sun"] },
   };
+  // Keep English compatibility and source other languages from the shared catalog.
+  function labels(lang) {
+    if (T[lang]) return T[lang];
+    const tr = (s) => window.I18N ? window.I18N.tr(s) : s;
+    const src = { ...T.sv, charge: "Laddning pågår" };
+    return Object.fromEntries(Object.entries(src).map(([k, v]) => [k, Array.isArray(v) ? v.map(tr) : tr(v)]));
+  }
   const BATC = { charge: "#2dd4bf", discharge: "#f59e0b", export: "#e879f9", hold: "#94a3b8", idle: "#94a3b8" };
   const CARC = ["#a78bfa", "#60a5fa", "#f472b6", "#34d399"];
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -44,7 +51,7 @@
 
   function skyline(el, data, opts) {
     style();
-    const L = T[opts.lang] || T.sv;
+    const L = labels(opts.lang);
     const S = (data && data.slots) || [];
     if (!S.length) { el.innerHTML = ""; return null; }
     const N = S.length, cars = data.cars || [];
@@ -137,7 +144,7 @@
       sun.setAttribute("transform", `translate(${f1(x)},${f1(sy)})`); sun.style.transition = "transform .18s ease-out";
       cur.setAttribute("x1", f1(x)); cur.setAttribute("x2", f1(x));
       const d = new Date(s.t), lab = i === 0 ? L.now : d.getDate() === day0 ? L.today : L.tomorrow;
-      const price = s.price == null ? "–" : `${s.price.toFixed(2).replace(".", opts.lang === "en" ? "." : ",")} kr/kWh`;
+      const price = s.price == null ? "–" : `${s.price.toFixed(2).replace(".", opts.lang === "en" ? "." : ",")} ${esc(opts.unit || "kr")}/kWh`;
       g.innerHTML = `<div class="k">${esc(lab)}</div><div class="r"><span class="t">${(i === 0 ? new Date() : d).toTimeString().slice(0, 5)}</span><span class="p">${price}</span></div><div class="a">${pills(s)}</div>`;
     };
     let raf = 0, want = 0, drag = false;
@@ -154,7 +161,7 @@
   function mount(el, data, opts) {
     opts = opts || {};
     style();
-    const L = T[opts.lang] || T.sv;
+    const L = labels(opts.lang);
     let mode = "skyline";
     try { mode = localStorage.getItem("ew_planview") || "skyline"; } catch (e) { /* privat läge */ }
     if (mode === "clock" && !window.EWPlanClock) mode = "skyline";

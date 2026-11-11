@@ -145,7 +145,7 @@ function pageBil() {
   if (!S) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
   const p = primary(), main = S.cars.find((c) => c.key === p) || S.cars[0], other = S.cars.find((c) => c !== main), simple = LS.get("ew_simple", "") === "1";
   const carseg = `<div class="seg carseg">${S.cars.map((c) => `<button data-a="swap" data-c="${c.key}" class="${c.key === main.key ? "on" : ""}">${esc(c.name.split(" ")[0])} · ${c.soc ?? "–"} %</button>`).join("")}</div>`;
-  const ec = EC && window.EWJournal ? EWJournal.evCostHtml(EC, { compact: true }) : "";     // laddat och vad det kostade (ev_cost.py)
+  const ec = EC && window.EWJournal ? EWJournal.evCostHtml(EC, { compact: true, unit: moneyUnit() }) : "";     // laddat och vad det kostade (ev_cost.py)
   return `<div class="page">${carseg}${hero(main)}${simple ? "" : compact(other)}${planChart(S.price, S.cars)}${ec && !simple ? `<section class="card">${ec}</section>` : ""}</div>`;
 }
 // ---- Hus -------------------------------------------------------------------------------------------------------------------------
@@ -414,7 +414,7 @@ function render() {
   const pcs = $("#pcslot");
   if (pcs && PC && window.EWPlanView) {
     if (!PCEL) PCEL = document.createElement("div");
-    if (PCNEW && (!PCH || PCH.index === 0)) { PCH = EWPlanView.mount(PCEL, PC, { lang: I18N.lang === "en" ? "en" : "sv", unit: moneyUnit() }); PCNEW = false; }
+    if (PCNEW && (!PCH || PCH.index === 0)) { PCH = EWPlanView.mount(PCEL, PC, { lang: I18N.lang, unit: moneyUnit() }); PCNEW = false; }
     pcs.replaceWith(PCEL);
   }
   const _pg = document.querySelector(".page");
@@ -532,7 +532,7 @@ async function logSheet(first = true) {
 async function reportSheet() {
   let d; try { d = await api("report"); } catch (e) { return toast(e.message); } const t = d.total;
   sheet(`<h3>Veckorapport (7 dygn)</h3><div class="note">Förbrukning ${f1(t.use, 0)} kWh · sol ${f1(t.sun, 0)} kWh · elbil ${f1(t.ev, 0)} kWh · spotkostnad ca ${f1(t.cost, 0)} ${moneyUnit()} · snittpris ${f1(t.price, 2)} ${moneyUnit()}/kWh</div>
-  <div class="setrow note"><b style="flex:1">Dag</b><b style="width:56px;text-align:right">Förbr.</b><b style="width:48px;text-align:right">Sol</b><b style="width:48px;text-align:right">Bil</b><b style="width:48px;text-align:right">kr</b></div>
+  <div class="setrow note"><b style="flex:1">Dag</b><b style="width:56px;text-align:right">Förbr.</b><b style="width:48px;text-align:right">Sol</b><b style="width:48px;text-align:right">Bil</b><b style="width:48px;text-align:right">${esc(moneyUnit())}</b></div>
   ${d.days.map((x) => `<div class="setrow"><span style="flex:1">${esc(x.d)}</span><span style="width:56px;text-align:right">${f1(x.use, 0)}</span><span style="width:48px;text-align:right">${f1(x.sun, 0)}</span><span style="width:48px;text-align:right">${f1(x.ev, 0)}</span><span style="width:48px;text-align:right">${f1(x.cost, 0)}</span></div>`).join("")}<div class="note">kWh per dygn. Kostnaden är spotpris utan nätavgifter.</div>`);
 }
 function spaReadySheet() {

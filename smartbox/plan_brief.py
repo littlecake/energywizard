@@ -27,11 +27,11 @@ def _local(ts):
     return ts.replace(tzinfo=SWE) if ts.tzinfo is None else ts.astimezone(SWE)
 
 
-def _kr(v):
+def _kr(v, currency="SEK", symbol="kr"):
     """Samma stil som webdashboardens fmtKrOre: under 1 kr i öre, annars kronor."""
     if v is None:
         return "–"
-    return f"{round(v * 100)} öre" if abs(v) < 1 and v != 0 else f"{_num(v, 2)} kr"
+    return f"{round(v * 100)} öre" if currency == "SEK" and abs(v) < 1 and v != 0 else f"{_num(v, 2)} {symbol}"
 
 
 def _clock(ts, now):
@@ -83,7 +83,7 @@ def _price_lookup(prices):
     return pts, at
 
 
-def ev_items(ev_rows, prices, now):
+def ev_items(ev_rows, prices, now, currency="SEK", symbol="kr"):
     """Sammanhängande laddpass per bil som inte redan är slut."""
     now = _local(now)
     pts, price_at = _price_lookup(prices)
@@ -117,9 +117,9 @@ def ev_items(ev_rows, prices, now):
             ps = [(p, kw) for p, kw in ps if p is not None]
             avg = sum(p * kw for p, kw in ps) / sum(kw for _, kw in ps) if ps else None
             davg = day_avg.get(b["start"].date())
-            why = f"snittpris {_kr(avg)}/kWh" if avg is not None else ""
+            why = f"snittpris {_kr(avg, currency, symbol)}/kWh" if avg is not None else ""
             if avg is not None and davg is not None:
-                why += f" (dygnets snitt {_kr(davg)})"
+                why += f" (dygnets snitt {_kr(davg, currency, symbol)})"
             items.append({
                 "kind": "ev", "car": car, "start": b["start"].isoformat(), "end": b["end"].isoformat(),
                 "when": _span(max(b["start"], now), b["end"], now),
@@ -130,7 +130,7 @@ def ev_items(ev_rows, prices, now):
     return items
 
 
-def heat_items(prices, now, strategy_fn, cheap_hours_count=8, current_mode=None):
+def heat_items(prices, now, strategy_fn, cheap_hours_count=8, current_mode=None, currency="SEK", symbol="kr"):
     """Värmepumpens grundläge per sammanhängande period, enligt gpm.py:s prisregel."""
     now = _local(now)
     pts, _ = _price_lookup(prices)
@@ -181,8 +181,8 @@ def heat_items(prices, now, strategy_fn, cheap_hours_count=8, current_mode=None)
             it["kind"] = "heat"
             cheap = it["mode"] == "CHEAP"
             it["title"] = "🔥 Huset laddas med värme" if cheap else "🌡️ Värmen sänks"
-            it["detail"] = (f"Bland dygnets {cheap_hours_count} billigaste timmar (gräns {_kr(lim)}/kWh)." if cheap
-                            else f"Elpriset över dagens gräns {_kr(lim)}/kWh - huset lever på lagrad värme.")
+            it["detail"] = (f"Bland dygnets {cheap_hours_count} billigaste timmar (gräns {_kr(lim, currency, symbol)}/kWh)." if cheap
+                            else f"Elpriset över dagens gräns {_kr(lim, currency, symbol)}/kWh - huset lever på lagrad värme.")
     for it in items:
         if isinstance(it.get("start"), datetime):
             s, e = it["start"], it["end"]
@@ -197,7 +197,7 @@ _BAT = {"charge": "🔋 Batteriet laddar", "discharge": "🔋 Batteriet laddar u
 EXPORT_KW = 0.1        # planerat nätflöde under -0,1 kW medan batteriet laddar ur = säljer överskottet (Anders på Discord)
 
 
-def battery_items(rows, now):
+def battery_items(rows, now, currency="SEK", symbol="kr"):
     """rows = [(t_slot, action, soc_pct, spot[, battery_kw[, grid_kw]])] ur battery_plan_slots. Urladdning när planen
     säljer till nätet (grid_kw < -EXPORT_KW) blir egna pass med action "export" - egen färg i gränssnittet. (soc_pct = nivån efter
     kvarten). Sammanhängande pass utom auto. Varje pass får också nivån före/efter, energin och det högsta
@@ -232,7 +232,7 @@ def battery_items(rows, now):
         peak = (max(sp) if b["action"] in ("discharge", "export") else min(sp) if b["action"] == "charge" else None) if sp else None
         parts = [f"till {float(b['soc']):.0f} %" if b["soc"] is not None else ""]
         if avg is not None:
-            parts.append(f"spotpris {_kr(avg)}/kWh")
+            parts.append(f"spotpris {_kr(avg, currency, symbol)}/kWh")
         out.append({"kind": "battery", "action": b["action"], "start": b["start"].isoformat(), "end": b["end"].isoformat(),
                     "when": _span(max(b["start"], now), b["end"], now), "title": _BAT[b["action"]],
                     "detail": " · ".join(x for x in parts if x), "active": b["start"] <= now < b["end"],
@@ -255,12 +255,12 @@ def load_battery_rows(conn):
     return []
 
 
-def build_brief(now, prices, ev_rows, strategy_fn, cheap_hours_count=8, current_mode=None, battery_rows=None):
+def build_brief(now, prices, ev_rows, strategy_fn, cheap_hours_count=8, current_mode=None, battery_rows=None, currency="SEK", symbol="kr"):
     """{'headline': str, 'items': [...], 'note': str}. items sorterade på starttid, de som
     pågår nu markerade active=True."""
     now = _local(now)
-    items = ev_items(ev_rows, prices, now) + heat_items(prices, now, strategy_fn, cheap_hours_count, current_mode) \
-        + battery_items(battery_rows, now)
+    items = ev_items(ev_rows, prices, now, currency, symbol) + heat_items(prices, now, strategy_fn, cheap_hours_count, current_mode, currency, symbol) \
+        + battery_items(battery_rows, now, currency, symbol)
     items = [i for i in items if datetime.fromisoformat(i["start"]) < now + HORIZON]
     items.sort(key=lambda i: (i["start"], i["kind"] != "ev"))
 

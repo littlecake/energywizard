@@ -83,6 +83,7 @@ def decide(s, cfg, supported=frozenset({"auto"})):
             txt += f" EnergyWizard läser det ({soc:.0f} %) och räknar med det, men skriver aldrig."
         return {"intent": None, "power_w": None, "rule": "samarbete", "reason": txt}
 
+    symbol = s.get("currency_symbol", "kr")
     reserve, prio, max_soc = cfg.get("reserve_soc", 20.0), cfg.get("priority_soc", 50.0), cfg.get("max_soc", 100.0)
     pmax = cfg.get("max_power_w", 5000.0)
     above_reserve = soc is not None and soc > reserve
@@ -123,7 +124,7 @@ def decide(s, cfg, supported=frozenset({"auto"})):
         return out("discharge", "peak", f"Effekttaket är nått - batteriet täcker toppen ({soc:.0f} %).", pmax)
     price = s.get("price")
     if price is not None and price < 0 and soc < max_soc:
-        return out("charge", "negative", f"Minuspris ({price:.2f} kr/kWh) - laddar batteriet från nätet.", pmax)
+        return out("charge", "negative", f"Minuspris ({price:.2f} {symbol}/kWh) - laddar batteriet från nätet.", pmax)
     if s.get("ev_charging_grid"):
         return out("hold", "ev_grid", "Elbilen laddar från nätet - batteriet töms inte i bilen.")
     if s.get("ev_solar_active") and soc >= prio:
@@ -137,15 +138,15 @@ def decide(s, cfg, supported=frozenset({"auto"})):
         pmax_plan = pmax if planned in ("charge", "discharge") else None
         if pmax_plan and s.get("planned_power_w"):            # planens egen effekt, aldrig över taket
             pmax_plan = min(pmax_plan, max(500.0, float(s["planned_power_w"])))
-        detail = f" ({price:.2f} kr/kWh)" if price is not None else ""
+        detail = f" ({price:.2f} {symbol}/kWh)" if price is not None else ""
         saving = s.get("plan_saving_kr")
-        extra = f" Planen sparar ≈ {saving:.0f} kr mot ren självförbrukning." if saving and saving >= 1 else ""
+        extra = f" Planen sparar ≈ {saving:.0f} {symbol} mot ren självförbrukning." if saving and saving >= 1 else ""
         note = f" {s['learned_note']}" if s.get("learned_note") else ""
         return out(planned, "plan", f"{REASON.get(planned, 'Planen')}{detail}.{extra}{note}", pmax_plan)
     remaining = s.get("prices_rest_of_day") or []
     p33, p67 = _percentile(remaining, 33), _percentile(remaining, 67)
     if price is not None and p33 is not None and p67 is not None and price <= p33 and p67 > price * 1.2 + 0.05:
-        return out("hold", "cheap_hour", f"Billig timme ({price:.2f} kr) och dyrare timmar kvar idag - batteriet sparas till dem.")
+        return out("hold", "cheap_hour", f"Billig timme ({price:.2f} {symbol}) och dyrare timmar kvar idag - batteriet sparas till dem.")
     return out("auto", "default", f"Självförbrukning - batteriet täcker husets behov ({soc:.0f} %).")
 
 
