@@ -567,24 +567,34 @@ def plan_slots(car: str) -> list:
     return [{"t": int(t.replace(tzinfo=TZ).timestamp() * 1000), "kw": round(float(kw), 1)} for t, kw in rows]
 
 def solar_forecast_w(hours: list) -> dict:
-    """Prognosticerad solproduktion (W) per timme: husets inlärda klarhimmelsprofil (smartboxens solar_profile) x molnprognosen, samma formel som
-    smartboxens weather.get_smart_solar_w. {epoch-ms: W}; tom om profil eller väderprognos saknas."""
+    """Hourly PV power (epoch milliseconds -> W) from HA or the learned model.
+
+    Use time-weighted external intervals where covered; retain the existing
+    learned/weather fallback elsewhere, including when HA is unavailable.
+    """
     import pickle
+    import ha_solar_forecast
+    external = {}
+    for h in hours:
+        value = ha_solar_forecast.hourly_w(h)
+        if value is not None:
+            external[int(h.timestamp() * 1000)] = round(value)
     try:
         with ENGINE.connect() as c:
             r = c.execute(text("SELECT solar_profile FROM system_settings WHERE id = 1")).fetchone()
             prof = pickle.loads(bytes(r[0])) if r and r[0] else {}
             if not prof or not hours:
-                return {}
+                return external
             rows = c.execute(text("SELECT timestamp, cloud_cover FROM weather_forecast WHERE timestamp >= :a AND timestamp <= :b"), {"a": hours[0], "b": hours[-1]}).fetchall()
     except Exception:
-        return {}
+        return external
     cloud = {t.astimezone(TZ).replace(minute=0, second=0, microsecond=0): float(cc) for t, cc in rows if cc is not None}
     out = {}
     for h in hours:
         cc, roof = cloud.get(h), prof.get((h.month, h.hour))
         if cc is not None and roof is not None:
             out[int(h.timestamp() * 1000)] = round(max(0.0, roof * (1.0 - cc / 100.0 * 0.85)))
+    out.update(external)
     return out
 
 def prices() -> dict:

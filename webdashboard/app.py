@@ -274,6 +274,52 @@ async def api_battery_plan_settings_save(request: Request):
     return {"ok": True, **upd}
 
 
+@app.get("/api/solar-forecast-settings")
+async def solar_forecast_settings_get(request: Request):
+    import asyncio
+    import ha_solar_forecast as forecast
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"detail": "Bara ägaren kan ändra solprognosen"}, status_code=403)
+    source, entities = forecast.configuration()
+    def read():
+        candidates = []
+        try:
+            response = homeassistant.requests.get(f"{homeassistant._BASE}/states", headers=homeassistant._HEADERS,
+                                                 verify=homeassistant._VERIFY, timeout=10)
+            response.raise_for_status()
+            for state in response.json():
+                attrs = state.get("attributes") or {}
+                entity = state.get("entity_id", "")
+                if entity.startswith("sensor.") and ("detailedForecast" in attrs or "detailedHourly" in attrs):
+                    candidates.append({"entity": entity, "name": attrs.get("friendly_name") or entity})
+        except Exception:
+            pass
+        return sorted(candidates, key=lambda item: item["entity"]), forecast.snapshot()
+    candidates, snapshot = await asyncio.to_thread(read)
+    return {"ok": True, "source": source, "entities": list(entities), "candidates": candidates,
+            "status": snapshot["state"]}
+
+
+@app.post("/api/solar-forecast-settings")
+async def solar_forecast_settings_save(request: Request):
+    import ha_solar_forecast as forecast
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"detail": "Bara ägaren kan ändra solprognosen"}, status_code=403)
+    body = await request.json()
+    try:
+        entities = forecast.validate(body.get("source"), body.get("entities"))
+    except ValueError as exc:
+        messages = {"invalid_source": "Okänd källa för solprognosen",
+                    "invalid_entities": "Välj högst sju giltiga sensorentiteter",
+                    "missing_entities": "Välj minst en Solcast-prognossensor"}
+        return JSONResponse({"detail": messages[str(exc)]}, status_code=400)
+    ew_settings.update(solar_forecast_source=body["source"], solar_forecast_entities=entities)
+    forecast.invalidate()
+    return {"ok": True}
+
+
 @app.get("/api/mqtt-settings")
 async def mqtt_get(request: Request):
     """Inställningar -> Home Assistant via MQTT (smartbox/mqtt_bridge.py). Lösenordet skickas aldrig tillbaka."""

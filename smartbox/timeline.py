@@ -169,7 +169,7 @@ def load(conn, now=None, cars=None, has_spa=None, has_heat=None):
             if hh not in fut_prices:
                 continue
             cloud, _, _, _ = weather.get_weather_at(hh)
-            w = weather.get_smart_solar_w(cloud, hh)
+            w = weather.get_hourly_solar_w(cloud, hh)
             fut_solar[hh] = round(float(w) / 1000.0, 2) if w is not None else None
     except Exception:
         pass

@@ -1,8 +1,7 @@
-"""Solprognos per dygn: idag (hela dagen, hittills uppmätt och kvar), imorgon och i övermorgon.
+"""Daily PV forecast from the selected HA source or existing learned model.
 
-Samma timprognos som motorn och tidslinjen använder (weather.get_smart_solar_w: molnprognosen
-från Open-Meteo gånger husets inlärda solprofil per månad och timme), summerad per dygn.
-Visas bara när huset har solceller, alltså när produktion har mätts de senaste 14 dagarna.
+Hourly averages are integrated into today's total/remaining energy and the next
+two days. Shown when PV production has been recorded within the past 14 days.
 """
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -69,11 +68,19 @@ def load(conn, now=None):
         profile = learning.get_solar_profile()
     except Exception:
         pass
+    import ha_solar_forecast
     hourly = {}
     for ts, cloud in rows:
         t = ts if ts.tzinfo else ts.replace(tzinfo=SWE)
         t = t.astimezone(SWE)
-        hourly[t] = weather.get_smart_solar_w(float(cloud or 0.0), t, profile)
+        external = ha_solar_forecast.hourly_w(t)
+        hourly[t] = external if external is not None else weather.get_smart_solar_w(float(cloud or 0.0), t, profile, use_external=False)
+    # External forecasts remain useful during a weather-provider outage.
+    for i in range(72):
+        t = day0 + timedelta(hours=i)
+        external = ha_solar_forecast.hourly_w(t)
+        if external is not None:
+            hourly[t] = external
     return summarize(hourly, now, float(produced[0]) if produced and produced[0] is not None else None)
 
 
