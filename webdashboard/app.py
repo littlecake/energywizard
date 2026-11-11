@@ -2049,4 +2049,3 @@ def _index_html() -> str:
 @app.get("/{full_path:path}")
 async def spa(full_path: str):
     return HTMLResponse(_index_html(), headers={"Cache-Control": "no-cache"})
-

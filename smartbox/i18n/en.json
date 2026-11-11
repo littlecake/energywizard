@@ -2093,5 +2093,9 @@
  "Även fasta priser och HDO kräver en fungerande spotprissensor för EnergyWizards planering och försäljningspris.": "Fixed prices and HDO still require a working spot price sensor for EnergyWizard's planning and selling price.",
  "Råa OTE-spotpriser är normalt utan moms. Kontrollera om den valda sensorn redan inkluderar moms innan du sparar.": "Raw OTE spot prices normally exclude VAT. Check whether the selected sensor already includes VAT before saving.",
  "Tjeckien": "Czechia",
- "Standard för Tjeckien: # %": "Default for Czechia: # %"
+ "Standard för Tjeckien: # %": "Default for Czechia: # %",
+ "Läsning utan styrning föreslås tills lägena har verifierats i Home Assistant": "Monitoring without control is suggested until the modes have been verified in Home Assistant",
+ "Eco-lägenas funktion och effekt-/SOC-gränser måste verifieras för din integration och firmware": "Eco mode behavior and power/SOC limits must be verified for your integration and firmware",
+ "GoodWe: endast lägen som Home Assistant erbjuder föreslås": "GoodWe: only modes offered by Home Assistant are suggested",
+ "GoodWe: lägeslistan eller normalläget general saknas": "GoodWe: the mode list or normal general mode is missing"
 }
