@@ -212,8 +212,13 @@ def estimate_solar_w(cloud_cover_pct, dt):
 
     return round(clear_sky_prod * cloud_factor, 1)
 
-def get_smart_solar_w(cloud_cover_pct, dt, solar_profile=None):
-    """Använder husets digitala tvilling (inlärd maxproduktion per månad/timme) om den finns."""
+def get_smart_solar_w(cloud_cover_pct, dt, solar_profile=None, *, use_external=True):
+    """Prefer configured HA intervals, then the learned profile/internal model."""
+    if use_external:
+        import ha_solar_forecast
+        external = ha_solar_forecast.power_at(dt)
+        if external is not None:
+            return external
     if solar_profile is None:
         solar_profile = learning.get_solar_profile()
     if solar_profile:
@@ -221,6 +226,15 @@ def get_smart_solar_w(cloud_cover_pct, dt, solar_profile=None):
         if roof_max is not None:
             return max(0.0, roof_max * (1.0 - (cloud_cover_pct / 100.0) * 0.85))
     return estimate_solar_w(cloud_cover_pct, dt)
+
+def get_hourly_solar_w(cloud_cover_pct, dt, solar_profile=None):
+    """Hourly consumers use a time-weighted mean of native Solcast intervals."""
+    import ha_solar_forecast
+    external = ha_solar_forecast.hourly_w(dt)
+    if external is not None:
+        return external
+    return get_smart_solar_w(cloud_cover_pct, dt, solar_profile, use_external=False)
+
 
 SUNNY_RATIO = 0.55          # prognosen minst så här stor andel av klarväder = soligt
 SUNNY_MIN_CLEAR_KWH = 1.5   # ... och det ska finnas sol att tala om (inte skymning eller vintermörker)
@@ -240,15 +254,14 @@ def sun_outlook(start, hours):
     for i in range(int(hours)):
         h = h0 + timedelta(hours=i)
         cloud, _, _, _ = get_weather_at(h)
-        kwh += get_smart_solar_w(cloud, h, profile) / 1000.0
-        clear += get_smart_solar_w(0.0, h, profile) / 1000.0
+        kwh += get_hourly_solar_w(cloud, h, profile) / 1000.0
+        clear += get_smart_solar_w(0.0, h, profile, use_external=False) / 1000.0
     return {"kwh": round(kwh, 1), "clear_kwh": round(clear, 1), "sunny": sunny_verdict(kwh, clear)}
 
 
 def get_solar_forecast_now_and_next():
     now       = datetime.now(SWE_TZ)
-    next_hour = now.replace(minute=0, second=0, microsecond=0)
-    next_hour = next_hour.replace(hour=next_hour.hour + 1) if next_hour.hour < 23 else next_hour
+    next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
 
     cloud_now,  _, _, _ = get_weather_at(now)
     cloud_next, _, _, _ = get_weather_at(next_hour)
